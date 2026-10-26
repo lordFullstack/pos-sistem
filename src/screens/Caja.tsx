@@ -19,18 +19,21 @@ const PAY: [PayMethod, string][] = [['efectivo', 'Efectivo'], ['tarjeta', 'Tarje
 function ProductCard({ p, qty, onClick }: { p: Product; qty: number; onClick: () => void }) {
   const photo = useImageUrl(p.imageId);
   const hasOpts = !!p.opts?.length;
+  // "desde" solo cuando alguna opción sube el precio (tamaño grande, adicionales…)
+  const fromPrice = !!p.opts?.some((g) => g.choices.some((c) => c.add > 0));
   return (
     <button type="button" className={`product${photo ? ' has-photo' : ''}`} data-in={qty > 0} style={{ background: p.tint }} onClick={onClick}
-      aria-label={hasOpts ? `Elegir opciones de ${p.name}` : `Agregar ${p.name}`}>
+      aria-label={hasOpts ? `Elegir opciones de ${p.name}, ${fromPrice ? 'desde ' : ''}${money(p.price)}` : `Agregar ${p.name}, ${money(p.price)}`}>
       {photo ? <img className="photo" src={photo} alt="" /> : <span className="art"><ProductIcon name={p.icon} /></span>}
       <span className="info">
         <span className="name">{p.name}</span>
         <span className="desc">{p.desc}</span>
         <span className="bottom">
-          <span className="price num">{money(p.price)}</span>
-          <span className="add" aria-hidden="true">
-            {hasOpts ? (<><Icon name="sliders" size={15} stroke={2.4} /> Opciones</>) : <Icon name="plus" size={16} stroke={2.4} />}
+          <span className="col" style={{ gap: 0 }}>
+            {fromPrice && <span className="from">desde</span>}
+            <span className="price num">{money(p.price)}</span>
           </span>
+          <span className="add" aria-hidden="true"><Icon name="plus" size={18} stroke={2.6} /></span>
         </span>
       </span>
       {qty > 0 && <span className="badge">{qty}</span>}
