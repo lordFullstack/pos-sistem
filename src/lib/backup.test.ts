@@ -25,7 +25,8 @@ describe('copias de seguridad', () => {
     const { categories: _c, products: _p, closures: _x, ...rest } = v2;
     const v1 = { app: 'pos-moderno', createdAt: 1, createdBy: 'Ana', data: { ...rest, version: 1 } };
     const f = parseBackup(JSON.stringify(v1));
-    expect(f.data.version).toBe(2);
+    expect(f.data.version).toBe(3);
+    expect(f.data.zones.map((z) => z.name)).toEqual(['Salón principal', 'Terraza']);
     expect(f.data.products.find((p) => p.id === 'cono')?.active).toBe(true);
     expect(f.data.categories.map((c) => c.name)).toContain('Paletas');
     expect(f.data.closures).toEqual([]);

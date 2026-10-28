@@ -34,7 +34,7 @@ export function parseBackup(text: string): BackupFile {
   }
   const f = obj as Partial<BackupFile>;
   const version = (f.data as { version?: number } | undefined)?.version;
-  if (f.app !== 'pos-moderno' || !f.data || (version !== 1 && version !== 2)) {
+  if (f.app !== 'pos-moderno' || !f.data || (version !== 1 && version !== 2 && version !== 3)) {
     throw new Error('Este archivo no es una copia de POS Moderno.');
   }
   const d = f.data;

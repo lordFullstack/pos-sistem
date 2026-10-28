@@ -120,7 +120,8 @@ export interface DiningTable {
   id: string;
   /** Nombre que se ve (M1, Barra 2…). Si falta, se muestra el id. */
   label?: string;
-  zone: 'salon' | 'terraza';
+  /** Id de la zona (ver Zone). */
+  zone: string;
   seats: number;
   x: number;
   y: number;
@@ -129,6 +130,13 @@ export interface DiningTable {
   waiter: string;
   openedAt?: number;
   reserva?: { time: string; note: string };
+}
+
+/** Zona del local: Salón principal, Terraza, Segundo piso… */
+export interface Zone {
+  id: string;
+  name: string;
+  sort: number;
 }
 
 export interface InventoryItem {
@@ -197,8 +205,9 @@ export interface BackupEntry {
 
 /** Todo lo que se guarda y entra en una copia de seguridad. */
 export interface AppData {
-  version: 2;
+  version: 3;
   settings: Settings;
+  zones: Zone[];
   users: User[];
   categories: Category[];
   products: Product[];

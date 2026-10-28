@@ -6,7 +6,7 @@ Hoy la app guarda todo en la tablet (navegador). Este documento explica qué ya 
 
 | Pieza | Dónde | Qué hace |
 |---|---|---|
-| Esquema de base de datos | `supabase/migrations/20261024120000_esquema_inicial.sql` | 14 tablas, índices, `updated_at` automático, seguridad por fila (RLS) y el bucket privado `product-images` |
+| Esquema de base de datos | `supabase/migrations/20261024120000_esquema_inicial.sql` | 15 tablas, índices, `updated_at` automático, seguridad por fila (RLS) y el bucket privado `product-images` |
 | Traductor de datos | `src/lib/supabaseMap.ts` (con pruebas) | Convierte una copia `.backup` en filas para cada tabla y en archivos para Storage |
 | Script de migración | `scripts/migrar-a-supabase.ts` | Sube una copia a un proyecto de Supabase; se puede repetir sin duplicar |
 | Ids | `src/lib/format.ts` (`uid`) | Todo lo nuevo se crea con UUID, el mismo formato de Supabase |
@@ -24,7 +24,7 @@ Hoy la app guarda todo en la tablet (navegador). Este documento explica qué ya 
 | `businesses` | Ajustes (nombre, NIT, tipo, color, impuesto, logo, contador de órdenes) |
 | `staff` | Usuarios y roles (con `pin_hash` y `pin_salt`) |
 | `categories`, `products` | Menú (opciones en `products.options`, formato JSON) |
-| `dining_tables` | Mesas (plano y estado) |
+| `zones`, `dining_tables` | Zonas del local y mesas (plano y estado) |
 | `orders`, `order_items` | Órdenes y lo que se pidió |
 | `sales`, `sale_items` | Cobros y lo que se vendió (nombre y precio del momento) |
 | `cash_closures` | Cierres de caja |

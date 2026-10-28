@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { DiningTable, PayMethod, TableStatus } from '../types';
+import type { DiningTable, PayMethod, TableStatus, Zone } from '../types';
 import { useCatalog, useCurrentUser, useStore } from '../store';
 import { useCart } from '../cartStore';
 import { mergeLines, totals } from '../lib/cart';
 import { TAX, minutesSince, money } from '../lib/format';
-import { FLOOR_H, FLOOR_W, MAX_SEATS, ZONE_NAMES, clampToFloor, freeSpot, tableGeom, tableLabel } from '../data/tables';
+import { DECOR, FLOOR_H, FLOOR_W, MAX_SEATS, clampToFloor, freeSpot, sortedZones, tableGeom, tableLabel, zoneName } from '../data/tables';
 import { can } from '../data/roles';
 import { useFitScale } from '../lib/useFitScale';
 import { Icon } from '../components/Icon';
@@ -29,9 +29,12 @@ export function Mesas() {
   const settings = useStore((s) => s.settings);
   const tables = useStore((s) => s.tables);
   const orders = useStore((s) => s.orders);
+  const zoneList = useStore((s) => s.zones);
   const st = useStore();
+  const zones = useMemo(() => sortedZones(zoneList), [zoneList]);
 
-  const [zone, setZone] = useState<DiningTable['zone']>('salon');
+  const [zonePick, setZone] = useState(() => tables.find((t) => t.status !== 'libre')?.zone ?? zones[0]?.id ?? '');
+  const [zonesOpen, setZonesOpen] = useState(false);
   const [sel, setSel] = useState(() => tables.find((t) => t.status !== 'libre')?.id ?? tables[0]?.id ?? '');
   const [pay, setPay] = useState<PayMethod>('tarjeta');
   const [dialog, setDialog] = useState<'reserve' | 'move' | null>(null);
@@ -73,16 +76,16 @@ export function Mesas() {
   }
 
   const canEdit = can(user?.role, 'ajustes');
+  // Si la zona elegida se borró, se muestra la primera.
+  const zone = zones.some((z) => z.id === zonePick) ? zonePick : zones[0]?.id ?? '';
   const inZone = tables.filter((t) => t.zone === zone);
   const busy = tables.filter((t) => t.status === 'ocupada' || t.status === 'cuenta');
   const people = busy.reduce((a, t) => a + t.guests, 0);
-  const table = tables.find((t) => t.id === sel) ?? inZone[0];
+  const table = tables.find((t) => t.id === sel && t.zone === zone) ?? inZone[0];
   const tOrders = table ? openOrdersBy[table.id] ?? [] : [];
   const lines = mergeLines(tOrders.map((o) => o.lines));
   const tt = totals(lines, settings.tax);
-  const decor = zone === 'salon'
-    ? [{ x: 40, y: 430, w: 460, h: 56, label: 'Barra' }, { x: 640, y: 450, w: 150, h: 36, label: 'Entrada' }]
-    : [{ x: 40, y: 430, w: 740, h: 40, label: 'Jardinera' }];
+  const decor = DECOR[zone] ?? [];
 
   const infoFor = (t: DiningTable) => {
     if (t.status === 'ocupada') return t.openedAt ? `${minutesSince(t.openedAt)} min` : '';
@@ -128,11 +131,11 @@ export function Mesas() {
 
         <div className="row" style={{ flexWrap: 'wrap' }}>
           <nav className="chips" aria-label="Zonas">
-            {(['salon', 'terraza'] as const).map((z) => {
+            {zones.map(({ id: z, name }) => {
               const list = tables.filter((t) => t.zone === z);
               return (
                 <button key={z} type="button" className="chip" aria-pressed={zone === z} onClick={() => { setZone(z); setSel(list[0]?.id ?? ''); }}>
-                  {ZONE_NAMES[z]} <span className="count">{list.filter((t) => t.status === 'ocupada' || t.status === 'cuenta').length}/{list.length}</span>
+                  {name} <span className="count">{list.filter((t) => t.status === 'ocupada' || t.status === 'cuenta').length}/{list.length}</span>
                 </button>
               );
             })}
@@ -151,13 +154,16 @@ export function Mesas() {
           <div className="notice notice-note" role="status" style={{ flexWrap: 'wrap' }}>
             <Icon name="move" size={18} />
             <span className="grow">Arrastra las mesas para acomodarlas (o usa las flechas del teclado). Toca una para cambiar su nombre, puestos o zona.</span>
-            <button type="button" className="btn btn-sm btn-white" onClick={() => setSel(st.addTable({ label: nextLabel(tables, zone), seats: 4, zone }))}>
+            <button type="button" className="btn btn-sm btn-white" onClick={() => setZonesOpen(true)}>
+              <Icon name="pencil" size={16} /> Zonas
+            </button>
+            <button type="button" className="btn btn-sm btn-white" disabled={!zone} onClick={() => setSel(st.addTable({ label: nextLabel(tables, zones, zone), seats: 4, zone }))}>
               <Icon name="plus" size={16} stroke={2.4} /> Agregar mesa
             </button>
           </div>
         )}
 
-        <section className={`floor-wrap${editing ? ' editing' : ''}`} ref={ref} aria-label={`Plano de ${ZONE_NAMES[zone]}`}>
+        <section className={`floor-wrap${editing ? ' editing' : ''}`} ref={ref} aria-label={`Plano de ${zoneName(zones, zone)}`}>
           <div className="floor" style={{ width: FLOOR_W, height: FLOOR_H, transform: `scale(${scale})` }}>
             {decor.map((d) => (
               <div key={d.label} className="decor" aria-hidden="true" style={{ left: d.x, top: d.y, width: d.w, height: d.h }}>{d.label}</div>
@@ -228,7 +234,7 @@ export function Mesas() {
           <div className="row" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div className="col" style={{ gap: 2 }}>
               <span style={{ fontSize: '1.5rem', fontWeight: 800 }}>Mesa {tableLabel(table)}</span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--ink-2)' }}>{table.seats} puestos · {ZONE_NAMES[table.zone]}</span>
+              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--ink-2)' }}>{table.seats} puestos · {zoneName(zones, table.zone)}</span>
             </div>
             <span className={`tag ${LOOK[table.status].tag}`}>{LOOK[table.status].label}</span>
           </div>
@@ -319,12 +325,13 @@ export function Mesas() {
           <div className="chips">
             {tables.filter((t) => t.status === 'libre').map((t) => (
               <button key={t.id} type="button" className="opt" onClick={() => { st.moveTable(table.id, t.id); setSel(t.id); setZone(t.zone); setDialog(null); }}>
-                {tableLabel(t)} · {t.seats} puestos · {ZONE_NAMES[t.zone]}
+                {tableLabel(t)} · {t.seats} puestos · {zoneName(zones, t.zone)}
               </button>
             ))}
           </div>
         </Dialog>
       )}
+      {zonesOpen && <ZonesDialog onClose={() => setZonesOpen(false)} current={zone} onPick={(z) => { setZone(z); setSel(tables.find((t) => t.zone === z)?.id ?? ''); }} />}
       {printing && table && <PrintReceipt lines={lines} title={`Cuenta mesa ${tableLabel(table)}`} at={Date.now()} onDone={() => setPrinting(false)} />}
     </div>
   );
@@ -349,9 +356,10 @@ function ReserveDialog({ tableId, onClose, onSave }: { tableId: string; onClose:
   );
 }
 
-/** Siguiente nombre libre para una mesa nueva: M11 en el salón, T7 en la terraza… */
-function nextLabel(tables: DiningTable[], zone: DiningTable['zone']): string {
-  const prefix = zone === 'salon' ? 'M' : 'T';
+/** Siguiente nombre libre para una mesa nueva: M11 en el salón, T7 en la terraza, S1 en "Segundo piso"… */
+function nextLabel(tables: DiningTable[], zones: Zone[], zone: string): string {
+  const initial = zoneName(zones, zone).normalize('NFD').replace(/[^A-Za-z]/g, '').charAt(0).toUpperCase();
+  const prefix = zone === 'salon' ? 'M' : zone === 'terraza' ? 'T' : initial || 'Z';
   const used = new Set(tables.map((t) => tableLabel(t).toUpperCase()));
   let n = 1;
   while (used.has(`${prefix}${n}`)) n++;
@@ -359,8 +367,9 @@ function nextLabel(tables: DiningTable[], zone: DiningTable['zone']): string {
 }
 
 /** Nombre, puestos, zona y borrado de una mesa (modo Editar plano). */
-function TableEditor({ table: t, onDeleted, onZone }: { table: DiningTable; onDeleted: () => void; onZone: (z: DiningTable['zone']) => void }) {
+function TableEditor({ table: t, onDeleted, onZone }: { table: DiningTable; onDeleted: () => void; onZone: (z: string) => void }) {
   const tables = useStore((s) => s.tables);
+  const zones = sortedZones(useStore((s) => s.zones));
   const update = useStore((s) => s.updateTable);
   const remove = useStore((s) => s.deleteTable);
   const [name, setName] = useState(tableLabel(t));
@@ -405,13 +414,13 @@ function TableEditor({ table: t, onDeleted, onZone }: { table: DiningTable; onDe
 
       <div className="field">
         <span className="label">Zona</span>
-        <div className="seg" role="group" aria-label="Zona">
-          {(['salon', 'terraza'] as const).map((z) => (
-            <button key={z} type="button" aria-pressed={t.zone === z} onClick={() => {
+        <div className="chips" role="radiogroup" aria-label="Zona">
+          {zones.map(({ id: z, name }) => (
+            <button key={z} type="button" role="radio" className="chip chip-sm" aria-checked={t.zone === z} onClick={() => {
               if (z === t.zone) return;
               update(t.id, { zone: z, ...freeSpot(tables.filter((x) => x.zone === z && x.id !== t.id), t.seats) });
               onZone(z);
-            }}>{ZONE_NAMES[z]}</button>
+            }}>{name}</button>
           ))}
         </div>
       </div>
@@ -436,5 +445,65 @@ function TableEditor({ table: t, onDeleted, onZone }: { table: DiningTable; onDe
         )}
       </div>
     </>
+  );
+}
+
+/** Renombrar, agregar y borrar zonas del local. */
+function ZonesDialog({ onClose, current, onPick }: { onClose: () => void; current: string; onPick: (id: string) => void }) {
+  const zones = sortedZones(useStore((s) => s.zones));
+  const tables = useStore((s) => s.tables);
+  const add = useStore((s) => s.addZone);
+  const rename = useStore((s) => s.renameZone);
+  const del = useStore((s) => s.deleteZone);
+  const [names, setNames] = useState<Record<string, string>>(() => Object.fromEntries(zones.map((z) => [z.id, z.name])));
+  const [newName, setNewName] = useState('');
+  const [error, setError] = useState('');
+  const taken = (name: string, except?: string) => zones.some((z) => z.id !== except && z.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const newProblem = newName.trim() && taken(newName) ? `Ya hay una zona llamada ${newName.trim()}.` : '';
+
+  return (
+    <Dialog title="Zonas del local" subtitle="Son las pestañas de arriba del plano. Cada zona tiene sus propias mesas." onClose={onClose} width="32rem">
+      {zones.map((z) => {
+        const n = tables.filter((t) => t.zone === z.id).length;
+        const value = names[z.id] ?? z.name;
+        const problem = !value.trim() ? 'Ponle un nombre.' : taken(value, z.id) ? 'Ese nombre ya existe.' : '';
+        return (
+          <div key={z.id} className="col" style={{ gap: 4 }}>
+            <div className="row" style={{ gap: 8 }}>
+              <input className="input grow" value={value} maxLength={24} aria-label={`Nombre de la zona ${z.name}`} aria-invalid={!!problem}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setNames({ ...names, [z.id]: v });
+                  if (v.trim() && !taken(v, z.id)) rename(z.id, v.trim());
+                }} />
+              <span className="tag" style={{ minWidth: 76, justifyContent: 'center' }}>{n === 1 ? '1 mesa' : `${n} mesas`}</span>
+              <button type="button" className="icon-btn" aria-label={`Borrar zona ${z.name}`} title={n ? 'Tiene mesas' : 'Borrar zona'}
+                onClick={() => { const err = del(z.id); setError(err ?? ''); if (!err && z.id === current) onPick(zones.find((x) => x.id !== z.id)?.id ?? ''); }}>
+                <Icon name="trash" size={16} />
+              </button>
+            </div>
+            {problem && <span role="alert" className="small" style={{ color: 'var(--bad-ink)', fontWeight: 700 }}>{problem}</span>}
+          </div>
+        );
+      })}
+      {error && <div className="notice notice-warn" role="alert"><Icon name="warning" size={16} /> {error}</div>}
+      <form className="col" style={{ gap: 4 }} onSubmit={(e) => {
+        e.preventDefault();
+        const name = newName.trim();
+        if (!name || taken(name)) return;
+        const id = add(name);
+        setNames({ ...names, [id]: name });
+        setNewName('');
+        setError('');
+        onPick(id);
+      }}>
+        <div className="row" style={{ gap: 8 }}>
+          <input className="input grow" value={newName} maxLength={24} onChange={(e) => setNewName(e.target.value)} placeholder="Nueva zona (ej. Segundo piso)" aria-label="Nueva zona" />
+          <button type="submit" className="btn btn-primary btn-md" disabled={!newName.trim() || !!newProblem}>Agregar</button>
+        </div>
+        {newProblem && <span role="alert" className="small" style={{ color: 'var(--bad-ink)', fontWeight: 700 }}>{newProblem}</span>}
+      </form>
+      <span className="small" style={{ color: 'var(--ink-3)' }}>Una zona con mesas no se puede borrar: primero pasa sus mesas a otra zona o bórralas.</span>
+    </Dialog>
   );
 }

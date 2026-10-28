@@ -26,7 +26,7 @@ const iso = (ms: number | undefined) => (ms ? new Date(ms).toISOString() : null)
 
 /** Orden en que hay que insertar las tablas para respetar las llaves foráneas. */
 export const TABLE_ORDER = [
-  'businesses', 'staff', 'categories', 'products', 'dining_tables', 'orders', 'order_items',
+  'businesses', 'staff', 'categories', 'products', 'zones', 'dining_tables', 'orders', 'order_items',
   'sales', 'sale_items', 'cash_closures', 'inventory_items', 'inventory_moves', 'expenses',
 ] as const;
 export type TableName = (typeof TABLE_ORDER)[number];
@@ -57,6 +57,8 @@ export async function mapBackupToSupabase(file: BackupFile, businessId: string):
   for (const c of d.categories) catIds.set(c.id, await id(c.id, 'category'));
   const productIds = new Map<string, string>();
   for (const p of d.products) productIds.set(p.id, await id(p.id, 'product'));
+  const zoneIds = new Map<string, string>();
+  for (const z of d.zones) zoneIds.set(z.id, await id(z.id, 'zone'));
   const tableIds = new Map<string, string>();
   for (const t of d.tables) tableIds.set(t.id, await id(t.id, 'table'));
   const orderIds = new Map<string, string>();
@@ -124,8 +126,9 @@ export async function mapBackupToSupabase(file: BackupFile, businessId: string):
     })),
     categories: d.categories.map((c) => ({ id: catIds.get(c.id), business_id: b, name: c.name, sort: c.sort })),
     products,
+    zones: d.zones.map((z) => ({ id: zoneIds.get(z.id), business_id: b, name: z.name, sort: z.sort })),
     dining_tables: d.tables.map((t) => ({
-      id: tableIds.get(t.id), business_id: b, label: t.label?.trim() || t.id, zone: t.zone, seats: t.seats, pos_x: t.x, pos_y: t.y, status: t.status,
+      id: tableIds.get(t.id), business_id: b, label: t.label?.trim() || t.id, zone_id: zoneIds.get(t.zone) ?? null, seats: t.seats, pos_x: t.x, pos_y: t.y, status: t.status,
       guests: t.guests, waiter: t.waiter, opened_at: iso(t.openedAt), reservation_time: t.reserva?.time ?? null, reservation_note: t.reserva?.note ?? null,
     })),
     orders,

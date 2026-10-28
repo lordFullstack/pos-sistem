@@ -154,11 +154,23 @@ create index products_category_idx on public.products (category_id);
 -- Mesas, órdenes y ventas
 -- ---------------------------------------------------------------------------
 
+-- Zonas del local (Salón principal, Terraza, Segundo piso…), editables desde la app.
+create table public.zones (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  name text not null check (length(trim(name)) > 0),
+  sort integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index zones_business_idx on public.zones (business_id, sort);
+
 create table public.dining_tables (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses (id) on delete cascade,
   label text not null,
-  zone text not null check (zone in ('salon', 'terraza')),
+  -- restrict: no se puede borrar una zona que todavía tiene mesas.
+  zone_id uuid not null references public.zones (id) on delete restrict,
   seats integer not null check (seats > 0),
   pos_x integer not null default 0,
   pos_y integer not null default 0,
@@ -289,6 +301,7 @@ create trigger businesses_updated_at before update on public.businesses for each
 create trigger staff_updated_at before update on public.staff for each row execute function public.set_updated_at();
 create trigger categories_updated_at before update on public.categories for each row execute function public.set_updated_at();
 create trigger products_updated_at before update on public.products for each row execute function public.set_updated_at();
+create trigger zones_updated_at before update on public.zones for each row execute function public.set_updated_at();
 create trigger dining_tables_updated_at before update on public.dining_tables for each row execute function public.set_updated_at();
 create trigger orders_updated_at before update on public.orders for each row execute function public.set_updated_at();
 create trigger inventory_items_updated_at before update on public.inventory_items for each row execute function public.set_updated_at();
@@ -302,6 +315,7 @@ alter table public.business_members enable row level security;
 alter table public.staff enable row level security;
 alter table public.categories enable row level security;
 alter table public.products enable row level security;
+alter table public.zones enable row level security;
 alter table public.dining_tables enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
@@ -336,6 +350,8 @@ create policy "miembros del negocio" on public.staff
 create policy "miembros del negocio" on public.categories
   for all to authenticated using (public.is_business_member(business_id)) with check (public.is_business_member(business_id));
 create policy "miembros del negocio" on public.products
+  for all to authenticated using (public.is_business_member(business_id)) with check (public.is_business_member(business_id));
+create policy "miembros del negocio" on public.zones
   for all to authenticated using (public.is_business_member(business_id)) with check (public.is_business_member(business_id));
 create policy "miembros del negocio" on public.dining_tables
   for all to authenticated using (public.is_business_member(business_id)) with check (public.is_business_member(business_id));

@@ -1,7 +1,7 @@
 import type { AppData, BizType, CartLine, DiningTable, Expense, Order, PayMethod, ProductTemplate as Product, Sale, Selection, User } from '../types';
 import { CATALOGS, seedMenu } from './catalogs';
 import { seedInventory } from './inventory';
-import { seedTables } from './tables';
+import { DEFAULT_ZONES, ensureZones, seedTables } from './tables';
 import { buildLine, defaultSelection, maxFor, totals } from '../lib/cart';
 import { startOfDay } from '../lib/stats';
 
@@ -11,7 +11,8 @@ export const ADMIN_ID = 'u-admin';
 export function emptyData(type: BizType, bizName: string, adminName: string, adminPinHash?: string): AppData {
   const admin: User = { id: ADMIN_ID, name: adminName || 'Administrador', email: '', role: 'admin', active: true, pinHash: adminPinHash };
   return {
-    version: 2,
+    version: 3,
+    zones: DEFAULT_ZONES.map((z) => ({ ...z })),
     ...seedMenu(type),
     closures: [],
     settings: {
@@ -41,12 +42,17 @@ export function emptyData(type: BizType, bizName: string, adminName: string, adm
 /**
  * Pone al día datos guardados con una versión anterior de la app.
  * v1 → v2: el menú pasa a ser editable (se copia la plantilla del tipo de negocio) y se agregan los cierres de caja.
+ * v2 → v3: las zonas de mesas se guardan como datos (Salón principal y Terraza al principio).
  */
 export function upgradeData(raw: unknown): AppData {
-  const d = raw as Partial<AppData> & { version?: number };
-  if (d.version === 2) return d as AppData;
-  const type = d.settings?.bizType ?? 'cafe';
-  return { ...(d as object), ...seedMenu(type), closures: [], version: 2 } as unknown as AppData;
+  // Datos de cualquier versión: se tipan sueltos hasta terminar de ponerlos al día.
+  type Loose = Omit<Partial<AppData>, 'version'> & { version?: number };
+  let d: Loose = { ...(raw as Loose) };
+  if (!d.version || d.version < 2) {
+    d = { ...d, ...seedMenu(d.settings?.bizType ?? 'cafe'), closures: [], version: 2 };
+  }
+  if (d.version === 2) d = { ...d, zones: ensureZones(undefined, d.tables ?? []), version: 3 };
+  return d as AppData;
 }
 
 /** Generador pseudoaleatorio con semilla: los datos de ejemplo salen igual cada vez. */

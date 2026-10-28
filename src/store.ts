@@ -8,7 +8,7 @@ import type {
 import { emptyData, upgradeData } from './data/initial';
 import { CATALOGS, seedMenu } from './data/catalogs';
 import { seedInventory } from './data/inventory';
-import { freeSpot, seedTables } from './data/tables';
+import { ensureZones, freeSpot, seedTables } from './data/tables';
 import { mergeLines, totals } from './lib/cart';
 import { uid } from './lib/format';
 
@@ -59,7 +59,12 @@ interface Actions {
   moveTable: (fromId: string, toId: string) => void;
 
   /** Plano de mesas (solo administradores). Devuelve el id de la mesa nueva. */
-  addTable: (t: { label: string; seats: number; zone: DiningTable['zone'] }) => string;
+  addTable: (t: { label: string; seats: number; zone: string }) => string;
+  /** Zonas del plano. Devuelve el id de la zona nueva. */
+  addZone: (name: string) => string;
+  renameZone: (id: string, name: string) => void;
+  /** Devuelve un mensaje si la zona tiene mesas o es la única. */
+  deleteZone: (id: string) => string | null;
   updateTable: (id: string, patch: Partial<Pick<DiningTable, 'label' | 'seats' | 'zone' | 'x' | 'y'>>) => void;
   /** Devuelve un mensaje si la mesa está en uso y no se puede borrar. */
   deleteTable: (id: string) => string | null;
@@ -77,8 +82,9 @@ export type Store = AppData & Actions;
 const blank = (): AppData => ({ ...emptyData('cafe', '', ''), settings: { ...emptyData('cafe', '', '').settings, onboarded: false } });
 
 const dataOf = (s: Store): AppData => ({
-  version: 2,
+  version: 3,
   settings: s.settings,
+  zones: s.zones,
   users: s.users,
   categories: s.categories,
   products: s.products,
@@ -114,6 +120,7 @@ export const useStore = create<Store>()(
             return {
               settings: { ...s.settings, bizType: type, bizName },
               tables: CATALOGS[type].hasTables && s.tables.length === 0 ? seedTables() : s.tables,
+              zones: CATALOGS[type].hasTables && s.tables.length === 0 ? ensureZones(s.zones, seedTables()) : s.zones,
               ...(resetMenu ? seedMenu(type) : {}),
               inventory: resetMenu ? seedInventory(type) : s.inventory,
               inventoryMoves: resetMenu ? [] : s.inventoryMoves,
@@ -248,6 +255,20 @@ export const useStore = create<Store>()(
           return id;
         },
         updateTable: (id, patch) => patchTable(id, patch),
+        addZone: (name) => {
+          const id = uid();
+          set((s) => ({ zones: [...s.zones, { id, name, sort: Math.max(-1, ...s.zones.map((z) => z.sort)) + 1 }] }));
+          return id;
+        },
+        renameZone: (id, name) => set((s) => ({ zones: s.zones.map((z) => (z.id === id ? { ...z, name } : z)) })),
+        deleteZone: (id) => {
+          const s = get();
+          const n = s.tables.filter((t) => t.zone === id).length;
+          if (n) return n === 1 ? 'Tiene 1 mesa. Muévela a otra zona o bórrala antes.' : `Tiene ${n} mesas. Muévelas a otra zona o bórralas antes.`;
+          if (s.zones.length <= 1) return 'Debe quedar al menos una zona.';
+          set({ zones: s.zones.filter((z) => z.id !== id) });
+          return null;
+        },
         deleteTable: (id) => {
           const s = get();
           const t = s.tables.find((x) => x.id === id);
@@ -281,7 +302,7 @@ export const useStore = create<Store>()(
     },
     {
       name: 'pos-moderno-data',
-      version: 2,
+      version: 3,
       partialize: (s) => dataOf(s),
       // Datos guardados con una versión anterior de la app se ponen al día solos.
       migrate: (persisted) => upgradeData(persisted) as unknown as Store,

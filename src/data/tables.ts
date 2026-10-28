@@ -1,10 +1,10 @@
-import type { DiningTable } from '../types';
+import type { DiningTable, Zone } from '../types';
 
 /** Plano base de 840 × 556 px. Las posiciones son la esquina superior izquierda de cada mesa. */
 export const FLOOR_W = 840;
 export const FLOOR_H = 556;
 
-const t = (id: string, zone: DiningTable['zone'], seats: number, x: number, y: number): DiningTable => ({
+const t = (id: string, zone: string, seats: number, x: number, y: number): DiningTable => ({
   id, zone, seats, x, y, status: 'libre', guests: 0, waiter: '',
 });
 
@@ -58,7 +58,33 @@ export function tableGeom(seats: number): TableGeom {
   };
 }
 
-export const ZONE_NAMES: Record<DiningTable['zone'], string> = { salon: 'Salón principal', terraza: 'Terraza' };
+/** Zonas con las que empieza un restaurante; después se renombran, agregan o borran en Mesas. */
+export const DEFAULT_ZONES: Zone[] = [
+  { id: 'salon', name: 'Salón principal', sort: 0 },
+  { id: 'terraza', name: 'Terraza', sort: 1 },
+];
+
+export function sortedZones(zones: Zone[]): Zone[] {
+  return [...zones].sort((a, b) => a.sort - b.sort);
+}
+
+export function zoneName(zones: Zone[], id: string): string {
+  return zones.find((z) => z.id === id)?.name ?? 'Sin zona';
+}
+
+/** Zonas por defecto más cualquier zona que usen las mesas y no esté en la lista. */
+export function ensureZones(zones: Zone[] | undefined, tables: DiningTable[]): Zone[] {
+  const out = [...(zones ?? [])];
+  for (const z of DEFAULT_ZONES) if (!out.some((x) => x.id === z.id)) out.push({ ...z, sort: out.length });
+  for (const t of tables) if (!out.some((x) => x.id === t.zone)) out.push({ id: t.zone, name: t.zone, sort: out.length });
+  return out;
+}
+
+/** Elementos fijos dibujados en el plano de las zonas iniciales. */
+export const DECOR: Record<string, { x: number; y: number; w: number; h: number; label: string }[]> = {
+  salon: [{ x: 40, y: 430, w: 460, h: 56, label: 'Barra' }, { x: 640, y: 450, w: 150, h: 36, label: 'Entrada' }],
+  terraza: [{ x: 40, y: 430, w: 740, h: 40, label: 'Jardinera' }],
+};
 
 export function tableLabel(t: Pick<DiningTable, 'id' | 'label'>): string {
   return t.label?.trim() || t.id;

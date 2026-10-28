@@ -41,6 +41,9 @@ describe('migración a Supabase', () => {
     rows.order_items.forEach((i) => expect(orders.has(i.order_id)).toBe(true));
     const sales = ids('sales');
     rows.sale_items.forEach((i) => expect(sales.has(i.sale_id)).toBe(true));
+    const zones = ids('zones');
+    expect(rows.zones.map((z) => z.name)).toEqual(['Salón principal', 'Terraza']);
+    rows.dining_tables.forEach((t) => expect(zones.has(t.zone_id)).toBe(true));
     const tables = ids('dining_tables');
     rows.orders.filter((o) => o.table_id).forEach((o) => expect(tables.has(o.table_id)).toBe(true));
     const staff = ids('staff');
