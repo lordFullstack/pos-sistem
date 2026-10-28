@@ -4,7 +4,7 @@ import { useCatalog, useCurrentUser, useStore } from '../store';
 import { useCart } from '../cartStore';
 import { mergeLines, totals } from '../lib/cart';
 import { TAX, minutesSince, money } from '../lib/format';
-import { FLOOR_H, FLOOR_W, ZONE_NAMES, tableGeom } from '../data/tables';
+import { FLOOR_H, FLOOR_W, MAX_SEATS, ZONE_NAMES, clampToFloor, freeSpot, tableGeom, tableLabel } from '../data/tables';
 import { can } from '../data/roles';
 import { useFitScale } from '../lib/useFitScale';
 import { Icon } from '../components/Icon';
@@ -37,6 +37,8 @@ export function Mesas() {
   const [dialog, setDialog] = useState<'reserve' | 'move' | null>(null);
   const [notice, setNotice] = useState('');
   const [printing, setPrinting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number; sx: number; sy: number; x0: number; y0: number; moved: boolean } | null>(null);
   const [, tick] = useState(0);
   const { ref, scale } = useFitScale(FLOOR_W, FLOOR_H);
 
@@ -70,6 +72,7 @@ export function Mesas() {
     return <div className="app"><main className="main"><header className="header"><Brand sub="Mesas" /></header><NoAccess what="las mesas" /><ModuleNav current="mesas" /></main></div>;
   }
 
+  const canEdit = can(user?.role, 'ajustes');
   const inZone = tables.filter((t) => t.zone === zone);
   const busy = tables.filter((t) => t.status === 'ocupada' || t.status === 'cuenta');
   const people = busy.reduce((a, t) => a + t.guests, 0);
@@ -96,7 +99,7 @@ export function Mesas() {
     else if (table.status === 'reservada') st.seatReservation(table.id);
     else if (table.status === 'cuenta') {
       const total = st.chargeTable(table.id, pay);
-      setNotice(`Mesa ${table.id} cobrada: ${money(total)}. Quedó libre.`);
+      setNotice(`Mesa ${tableLabel(table)} cobrada: ${money(total)}. Quedó libre.`);
     }
   };
   const primaryLabel = !table ? '' : {
@@ -111,9 +114,16 @@ export function Mesas() {
       <main className="main">
         <header className="header">
           <Brand sub={`${busy.length} de ${tables.length} mesas ocupadas · ${people} personas`} title="Mesas" icon={<Icon name="table" size={22} />} />
-          <a className="btn btn-primary spacer" href="#/caja" onClick={() => useCart.getState().setMode('llevar')}>
-            <Icon name="plus" size={18} stroke={2.4} /> Orden para llevar
-          </a>
+          {canEdit && (
+            <button type="button" className={`btn ${editing ? 'btn-primary' : 'btn-white'} spacer`} aria-pressed={editing} onClick={() => { setEditing(!editing); setNotice(''); setDrag(null); }}>
+              <Icon name={editing ? 'check' : 'pencil'} size={18} stroke={2.2} /> {editing ? 'Listo' : 'Editar plano'}
+            </button>
+          )}
+          {!editing && (
+            <a className={`btn btn-primary${canEdit ? '' : ' spacer'}`} href="#/caja" onClick={() => useCart.getState().setMode('llevar')}>
+              <Icon name="plus" size={18} stroke={2.4} /> Orden para llevar
+            </a>
+          )}
         </header>
 
         <div className="row" style={{ flexWrap: 'wrap' }}>
@@ -137,7 +147,17 @@ export function Mesas() {
           </div>
         </div>
 
-        <section className="floor-wrap" ref={ref} aria-label={`Plano de ${ZONE_NAMES[zone]}`}>
+        {editing && (
+          <div className="notice notice-note" role="status" style={{ flexWrap: 'wrap' }}>
+            <Icon name="move" size={18} />
+            <span className="grow">Arrastra las mesas para acomodarlas (o usa las flechas del teclado). Toca una para cambiar su nombre, puestos o zona.</span>
+            <button type="button" className="btn btn-sm btn-white" onClick={() => setSel(st.addTable({ label: nextLabel(tables, zone), seats: 4, zone }))}>
+              <Icon name="plus" size={16} stroke={2.4} /> Agregar mesa
+            </button>
+          </div>
+        )}
+
+        <section className={`floor-wrap${editing ? ' editing' : ''}`} ref={ref} aria-label={`Plano de ${ZONE_NAMES[zone]}`}>
           <div className="floor" style={{ width: FLOOR_W, height: FLOOR_H, transform: `scale(${scale})` }}>
             {decor.map((d) => (
               <div key={d.label} className="decor" aria-hidden="true" style={{ left: d.x, top: d.y, width: d.w, height: d.h }}>{d.label}</div>
@@ -145,17 +165,44 @@ export function Mesas() {
             {inZone.map((t) => {
               const g = tableGeom(t.seats);
               const info = infoFor(t);
+              const pos = drag?.id === t.id ? drag : t;
+              const dragging = drag?.id === t.id && drag.moved;
               return (
-                <div key={t.id} className="table-spot" style={{ left: t.x, top: t.y, width: g.w, height: g.h }}>
+                <div key={t.id} className={`table-spot${dragging ? ' dragging' : ''}`} style={{ left: pos.x, top: pos.y, width: g.w, height: g.h }}>
                   {g.chairs.map((c, i) => (
                     <span key={i} className="chair" aria-hidden="true" style={{ left: c.x, top: c.y, width: c.w, height: c.h }} />
                   ))}
                   <button
                     type="button" className={`table-btn ${LOOK[t.status].swatch}`} aria-pressed={table?.id === t.id}
-                    style={{ borderRadius: g.round ? 999 : 16 }} onClick={() => { setSel(t.id); setNotice(''); }}
-                    aria-label={`Mesa ${t.id}, ${t.seats} puestos, ${LOOK[t.status].label}${info ? ', ' + info : ''}`}
+                    style={{ borderRadius: g.round ? 999 : 16, touchAction: editing ? 'none' : undefined }} onClick={() => { setSel(t.id); setNotice(''); }}
+                    aria-label={`Mesa ${tableLabel(t)}, ${t.seats} puestos, ${LOOK[t.status].label}${info ? ', ' + info : ''}${editing ? '. Usa las flechas para moverla' : ''}`}
+                    onPointerDown={(e) => {
+                      if (!editing) return;
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      setSel(t.id);
+                      setDrag({ id: t.id, x: t.x, y: t.y, sx: e.clientX, sy: e.clientY, x0: t.x, y0: t.y, moved: false });
+                    }}
+                    onPointerMove={(e) => {
+                      if (!drag || drag.id !== t.id) return;
+                      const dx = (e.clientX - drag.sx) / scale;
+                      const dy = (e.clientY - drag.sy) / scale;
+                      setDrag({ ...drag, ...clampToFloor(drag.x0 + dx, drag.y0 + dy, t.seats), moved: drag.moved || Math.abs(dx) + Math.abs(dy) > 4 });
+                    }}
+                    onPointerUp={() => {
+                      if (drag?.id === t.id && drag.moved) st.updateTable(t.id, { x: drag.x, y: drag.y });
+                      setDrag(null);
+                    }}
+                    onPointerCancel={() => setDrag(null)}
+                    onKeyDown={(e) => {
+                      if (!editing) return;
+                      const d: Record<string, [number, number]> = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] };
+                      const m = d[e.key];
+                      if (!m) return;
+                      e.preventDefault();
+                      st.updateTable(t.id, clampToFloor(t.x + m[0], t.y + m[1], t.seats));
+                    }}
                   >
-                    <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1 }}>{t.id}</span>
+                    <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1 }}>{tableLabel(t)}</span>
                     <span style={{ fontSize: 11, fontWeight: 700 }}>{LOOK[t.status].label}</span>
                     {info && <span className="num" style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-2)' }}>{info}</span>}
                   </button>
@@ -168,11 +215,19 @@ export function Mesas() {
         <ModuleNav current="mesas" />
       </main>
 
-      {table && (
+      {editing && (
+        <aside className="aside" aria-label="Editar mesa">
+          {table ? <TableEditor key={table.id} table={table} onDeleted={() => setSel(inZone.find((x) => x.id !== table.id)?.id ?? '')} onZone={setZone} /> : (
+            <div className="empty"><Icon name="table" size={40} stroke={1.6} /><strong>No hay mesas en esta zona</strong><span>Toca “Agregar mesa”.</span></div>
+          )}
+        </aside>
+      )}
+
+      {table && !editing && (
         <aside className="aside" aria-label="Detalle de la mesa">
           <div className="row" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div className="col" style={{ gap: 2 }}>
-              <span style={{ fontSize: '1.5rem', fontWeight: 800 }}>Mesa {table.id}</span>
+              <span style={{ fontSize: '1.5rem', fontWeight: 800 }}>Mesa {tableLabel(table)}</span>
               <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--ink-2)' }}>{table.seats} puestos · {ZONE_NAMES[table.zone]}</span>
             </div>
             <span className={`tag ${LOOK[table.status].tag}`}>{LOOK[table.status].label}</span>
@@ -258,19 +313,19 @@ export function Mesas() {
         </aside>
       )}
 
-      {dialog === 'reserve' && table && <ReserveDialog onClose={() => setDialog(null)} onSave={(time, note) => { st.reserveTable(table.id, time, note); setDialog(null); }} tableId={table.id} />}
+      {dialog === 'reserve' && table && <ReserveDialog onClose={() => setDialog(null)} onSave={(time, note) => { st.reserveTable(table.id, time, note); setDialog(null); }} tableId={tableLabel(table)} />}
       {dialog === 'move' && table && (
-        <Dialog title={`Mover mesa ${table.id}`} subtitle="Elige una mesa libre. El pedido y los comensales pasan a la nueva mesa." onClose={() => setDialog(null)}>
+        <Dialog title={`Mover mesa ${tableLabel(table)}`} subtitle="Elige una mesa libre. El pedido y los comensales pasan a la nueva mesa." onClose={() => setDialog(null)}>
           <div className="chips">
             {tables.filter((t) => t.status === 'libre').map((t) => (
               <button key={t.id} type="button" className="opt" onClick={() => { st.moveTable(table.id, t.id); setSel(t.id); setZone(t.zone); setDialog(null); }}>
-                {t.id} · {t.seats} puestos · {ZONE_NAMES[t.zone]}
+                {tableLabel(t)} · {t.seats} puestos · {ZONE_NAMES[t.zone]}
               </button>
             ))}
           </div>
         </Dialog>
       )}
-      {printing && table && <PrintReceipt lines={lines} title={`Cuenta mesa ${table.id}`} at={Date.now()} onDone={() => setPrinting(false)} />}
+      {printing && table && <PrintReceipt lines={lines} title={`Cuenta mesa ${tableLabel(table)}`} at={Date.now()} onDone={() => setPrinting(false)} />}
     </div>
   );
 }
@@ -291,5 +346,95 @@ function ReserveDialog({ tableId, onClose, onSave }: { tableId: string; onClose:
       <label className="field"><span className="label">Hora</span><input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>
       <label className="field"><span className="label">A nombre de</span><input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. Familia Pérez · 6 personas" /></label>
     </Dialog>
+  );
+}
+
+/** Siguiente nombre libre para una mesa nueva: M11 en el salón, T7 en la terraza… */
+function nextLabel(tables: DiningTable[], zone: DiningTable['zone']): string {
+  const prefix = zone === 'salon' ? 'M' : 'T';
+  const used = new Set(tables.map((t) => tableLabel(t).toUpperCase()));
+  let n = 1;
+  while (used.has(`${prefix}${n}`)) n++;
+  return `${prefix}${n}`;
+}
+
+/** Nombre, puestos, zona y borrado de una mesa (modo Editar plano). */
+function TableEditor({ table: t, onDeleted, onZone }: { table: DiningTable; onDeleted: () => void; onZone: (z: DiningTable['zone']) => void }) {
+  const tables = useStore((s) => s.tables);
+  const update = useStore((s) => s.updateTable);
+  const remove = useStore((s) => s.deleteTable);
+  const [name, setName] = useState(tableLabel(t));
+  const [confirm, setConfirm] = useState(false);
+  const [error, setError] = useState('');
+  const taken = (v: string) => tables.some((x) => x.id !== t.id && tableLabel(x).toLowerCase() === v.toLowerCase());
+  const clean = name.trim();
+  const nameError = !clean ? 'Ponle un nombre a la mesa.' : taken(clean) ? `Ya hay una mesa llamada ${clean}.` : '';
+  const inUse = t.status !== 'libre';
+  const setSeats = (n: number) => {
+    const seats = Math.min(MAX_SEATS, Math.max(1, n));
+    update(t.id, { seats, ...clampToFloor(t.x, t.y, seats) });
+  };
+
+  return (
+    <>
+      <div className="col" style={{ gap: 2 }}>
+        <span style={{ fontSize: '1.5rem', fontWeight: 800 }}>Editar mesa</span>
+        <span className="muted">Los cambios se guardan solos.</span>
+      </div>
+
+      <label className="field">
+        <span className="label">Nombre</span>
+        <input className="input" value={name} maxLength={12} aria-invalid={!!nameError}
+          onChange={(e) => {
+            const v = e.target.value;
+            setName(v);
+            if (v.trim() && !taken(v.trim())) update(t.id, { label: v.trim() });
+          }} />
+        {nameError && <span role="alert" className="small" style={{ color: 'var(--bad-ink)', fontWeight: 700 }}>{nameError}</span>}
+      </label>
+
+      <div className="field">
+        <span className="label">Puestos</span>
+        <div className="row" style={{ justifyContent: 'space-between', height: 52, padding: '0 4px', borderRadius: 12, background: 'var(--bg)' }}>
+          <button type="button" className="icon-btn" aria-label="Menos puestos" disabled={t.seats <= 1} onClick={() => setSeats(t.seats - 1)}><Icon name="minus" size={16} stroke={2.4} /></button>
+          <span className="num" style={{ fontSize: '1.125rem', fontWeight: 800 }}>{t.seats} {t.seats === 1 ? 'puesto' : 'puestos'}</span>
+          <button type="button" className="icon-btn" aria-label="Más puestos" disabled={t.seats >= MAX_SEATS} onClick={() => setSeats(t.seats + 1)}><Icon name="plus" size={16} stroke={2.4} /></button>
+        </div>
+        <span className="small" style={{ color: 'var(--ink-3)' }}>Hasta 2 puestos se dibuja redonda, hasta 4 cuadrada y desde 5 rectangular.</span>
+      </div>
+
+      <div className="field">
+        <span className="label">Zona</span>
+        <div className="seg" role="group" aria-label="Zona">
+          {(['salon', 'terraza'] as const).map((z) => (
+            <button key={z} type="button" aria-pressed={t.zone === z} onClick={() => {
+              if (z === t.zone) return;
+              update(t.id, { zone: z, ...freeSpot(tables.filter((x) => x.zone === z && x.id !== t.id), t.seats) });
+              onZone(z);
+            }}>{ZONE_NAMES[z]}</button>
+          ))}
+        </div>
+      </div>
+
+      {inUse && (
+        <div className="notice notice-note"><Icon name="info" size={16} /> Esta mesa está {LOOK[t.status].label.toLowerCase()}: puedes moverla y renombrarla, pero no borrarla.</div>
+      )}
+
+      <div style={{ marginTop: 'auto' }}>
+        {error && <div className="notice notice-warn" role="alert" style={{ marginBottom: 8 }}><Icon name="warning" size={16} /> {error}</div>}
+        {confirm ? (
+          <div className="notice notice-warn" role="alertdialog" aria-label="Confirmar borrado" style={{ fontWeight: 600 }}>
+            <span className="grow">¿Borrar la mesa {tableLabel(t)}?</span>
+            <button type="button" className="btn btn-sm btn-white" onClick={() => setConfirm(false)}>No</button>
+            <button type="button" className="btn btn-sm" style={{ background: '#8a3b12', color: '#fff' }}
+              onClick={() => { const err = remove(t.id); setConfirm(false); if (err) setError(err); else onDeleted(); }}>Borrar</button>
+          </div>
+        ) : (
+          <button type="button" className="btn btn-md btn-danger" style={{ width: '100%' }} disabled={inUse} onClick={() => { setConfirm(true); setError(''); }}>
+            <Icon name="trash" size={16} /> Borrar mesa
+          </button>
+        )}
+      </div>
+    </>
   );
 }

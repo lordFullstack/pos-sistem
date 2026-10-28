@@ -8,7 +8,7 @@ import type {
 import { emptyData, upgradeData } from './data/initial';
 import { CATALOGS, seedMenu } from './data/catalogs';
 import { seedInventory } from './data/inventory';
-import { seedTables } from './data/tables';
+import { freeSpot, seedTables } from './data/tables';
 import { mergeLines, totals } from './lib/cart';
 import { uid } from './lib/format';
 
@@ -57,6 +57,12 @@ interface Actions {
   cancelReservation: (id: string) => void;
   reserveTable: (id: string, time: string, note: string) => void;
   moveTable: (fromId: string, toId: string) => void;
+
+  /** Plano de mesas (solo administradores). Devuelve el id de la mesa nueva. */
+  addTable: (t: { label: string; seats: number; zone: DiningTable['zone'] }) => string;
+  updateTable: (id: string, patch: Partial<Pick<DiningTable, 'label' | 'seats' | 'zone' | 'x' | 'y'>>) => void;
+  /** Devuelve un mensaje si la mesa está en uso y no se puede borrar. */
+  deleteTable: (id: string) => string | null;
 
   addInventoryItem: (item: Omit<InventoryItem, 'id'>) => void;
   registerEntry: (id: string, amount: number) => void;
@@ -233,6 +239,23 @@ export const useStore = create<Store>()(
               return t;
             }),
           });
+        },
+
+        addTable: ({ label, seats, zone }) => {
+          const id = uid();
+          const pos = freeSpot(get().tables.filter((t) => t.zone === zone), seats);
+          set((s) => ({ tables: [...s.tables, { id, label, zone, seats, ...pos, status: 'libre', guests: 0, waiter: '' }] }));
+          return id;
+        },
+        updateTable: (id, patch) => patchTable(id, patch),
+        deleteTable: (id) => {
+          const s = get();
+          const t = s.tables.find((x) => x.id === id);
+          if (!t) return null;
+          const open = s.orders.some((o) => o.tableId === id && !o.paid && o.status !== 'cancelada');
+          if (t.status !== 'libre' || open) return 'Solo se pueden borrar mesas libres, sin cuentas abiertas ni reservas.';
+          set({ tables: s.tables.filter((x) => x.id !== id) });
+          return null;
         },
 
         addInventoryItem: (item) => set((s) => ({ inventory: [...s.inventory, { ...item, id: uid() }] })),

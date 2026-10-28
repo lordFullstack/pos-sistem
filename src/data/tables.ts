@@ -59,3 +59,38 @@ export function tableGeom(seats: number): TableGeom {
 }
 
 export const ZONE_NAMES: Record<DiningTable['zone'], string> = { salon: 'Salón principal', terraza: 'Terraza' };
+
+export function tableLabel(t: Pick<DiningTable, 'id' | 'label'>): string {
+  return t.label?.trim() || t.id;
+}
+
+export const MAX_SEATS = 12;
+
+/** Borde libre alrededor de cada mesa (las sillas sobresalen 18 px). */
+const MARGIN = 24;
+
+/** Primera posición del plano donde cabe una mesa nueva sin tocar a las demás. */
+export function freeSpot(others: DiningTable[], seats: number): { x: number; y: number } {
+  const g = tableGeom(seats);
+  const boxes = others.map((t) => ({ ...tableGeom(t.seats), x: t.x, y: t.y }));
+  for (let y = MARGIN; y + g.h + MARGIN <= FLOOR_H; y += 10) {
+    for (let x = MARGIN; x + g.w + MARGIN <= FLOOR_W; x += 10) {
+      const hit = boxes.some((b) => x < b.x + b.w + MARGIN && x + g.w + MARGIN > b.x && y < b.y + b.h + MARGIN && y + g.h + MARGIN > b.y);
+      if (!hit) return { x, y };
+    }
+  }
+  return { x: MARGIN, y: MARGIN };
+}
+
+/** Mantiene la mesa (con sus sillas) dentro del plano y la ajusta a una cuadrícula de 10 px. */
+export function clampToFloor(x: number, y: number, seats: number): { x: number; y: number } {
+  const g = tableGeom(seats);
+  const snap = (v: number) => Math.round(v / 10) * 10;
+  // El tope también cae en la cuadrícula, para que una mesa pegada al borde siga alineada.
+  const maxX = Math.floor((FLOOR_W - g.w - 20) / 10) * 10;
+  const maxY = Math.floor((FLOOR_H - g.h - 20) / 10) * 10;
+  return {
+    x: Math.min(Math.max(snap(x), 20), maxX),
+    y: Math.min(Math.max(snap(y), 20), maxY),
+  };
+}

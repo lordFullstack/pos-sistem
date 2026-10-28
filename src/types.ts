@@ -118,6 +118,8 @@ export type TableStatus = 'libre' | 'ocupada' | 'cuenta' | 'reservada';
 
 export interface DiningTable {
   id: string;
+  /** Nombre que se ve (M1, Barra 2…). Si falta, se muestra el id. */
+  label?: string;
   zone: 'salon' | 'terraza';
   seats: number;
   x: number;

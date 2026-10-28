@@ -10,6 +10,7 @@ import { Brand } from '../components/Brand';
 import { ModuleNav } from '../components/ModuleNav';
 import { NoAccess } from '../components/NoAccess';
 import { PrintReceipt } from '../components/Receipt';
+import { tableLabel } from '../data/tables';
 
 const COLS: { id: OrderStatus; label: string; step: string; dot: string; action: string }[] = [
   { id: 'pendiente', label: 'Nuevas', step: 'Recibida', dot: '#B45309', action: 'Enviar a preparación' },
@@ -23,6 +24,7 @@ export function Ordenes() {
   const user = useCurrentUser();
   const settings = useStore((s) => s.settings);
   const orders = useStore((s) => s.orders);
+  const tables = useStore((s) => s.tables);
   const advanceOrder = useStore((s) => s.advanceOrder);
   const cancelOrder = useStore((s) => s.cancelOrder);
   const [filter, setFilter] = useState<Filter>('todas');
@@ -48,10 +50,15 @@ export function Ordenes() {
   const visible = open.filter((o) => {
     if (filter !== 'todas' && o.mode !== filter) return false;
     if (!q) return true;
-    return orderLabel(o.number).includes(q) || String(o.number).includes(q) || (o.tableId ?? '').toLowerCase().includes(q) || (o.customer ?? '').toLowerCase().includes(q);
+    return orderLabel(o.number).includes(q) || String(o.number).includes(q) || tableName(o).toLowerCase().includes(q) || (o.customer ?? '').toLowerCase().includes(q);
   });
   const selected = open.find((o) => o.id === sel) ?? visible[0];
-  const where = (o: Order) => (o.tableId ? `Mesa ${o.tableId}` : o.mode === 'mesa' ? 'Para comer aquí' : `Para llevar${o.customer ? ' · ' + o.customer : ''}`);
+  function tableName(o: Order) {
+    if (!o.tableId) return '';
+    const t = tables.find((x) => x.id === o.tableId);
+    return t ? tableLabel(t) : '(borrada)';
+  }
+  const where = (o: Order) => (o.tableId ? `Mesa ${tableName(o)}` : o.mode === 'mesa' ? 'Para comer aquí' : `Para llevar${o.customer ? ' · ' + o.customer : ''}`);
 
   const advance = (o: Order) => {
     const idx = open.findIndex((x) => x.id === o.id);

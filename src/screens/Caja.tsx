@@ -11,6 +11,7 @@ import { Brand } from '../components/Brand';
 import { ModuleNav } from '../components/ModuleNav';
 import { OptionsDialog } from '../components/OptionsDialog';
 import { PrintReceipt } from '../components/Receipt';
+import { tableLabel } from '../data/tables';
 import { useImageUrl } from '../lib/images';
 import { SwitchUserDialog } from '../components/SwitchUserDialog';
 
@@ -108,7 +109,7 @@ export function Caja({ tableParam }: { tableParam: string }) {
     if (empty || !table || !canCharge) return;
     const order = sendToKitchen({ lines: cart.lines, tableId: table.id });
     cart.clear();
-    setSent(`Comanda ${orderLabel(order.number)} enviada a cocina para la mesa ${table.id}.`);
+    setSent(`Comanda ${orderLabel(order.number)} enviada a cocina para la mesa ${tableLabel(table)}.`);
   };
 
   return (
@@ -171,9 +172,9 @@ export function Caja({ tableParam }: { tableParam: string }) {
             <span className="label">Mesa</span>
             <select className="input" value={cart.tableId} onChange={(e) => cart.setTable(e.target.value)}>
               <option value="">Elige una mesa…</option>
-              {tables.map((x) => (
+              {[...tables].sort((a, b) => a.zone.localeCompare(b.zone) || tableLabel(a).localeCompare(tableLabel(b), 'es', { numeric: true })).map((x) => (
                 <option key={x.id} value={x.id}>
-                  {x.id} · {x.seats} puestos · {x.status === 'libre' ? 'libre' : x.status === 'reservada' ? `reservada ${x.reserva?.time ?? ''}` : x.status === 'cuenta' ? 'por cobrar' : 'ocupada'}
+                  {tableLabel(x)} · {x.seats} puestos · {x.status === 'libre' ? 'libre' : x.status === 'reservada' ? `reservada ${x.reserva?.time ?? ''}` : x.status === 'cuenta' ? 'por cobrar' : 'ocupada'}
                 </option>
               ))}
             </select>
@@ -225,7 +226,7 @@ export function Caja({ tableParam }: { tableParam: string }) {
 
         {useTables ? (
           <button type="button" className="btn btn-primary btn-lg" disabled={empty || !table || !canCharge} onClick={onSend}>
-            <Icon name="print" /> {table ? `Enviar a cocina · Mesa ${table.id}` : 'Elige una mesa'}
+            <Icon name="print" /> {table ? `Enviar a cocina · Mesa ${tableLabel(table)}` : 'Elige una mesa'}
           </button>
         ) : (
           <>

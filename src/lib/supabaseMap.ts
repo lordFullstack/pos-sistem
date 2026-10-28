@@ -125,7 +125,7 @@ export async function mapBackupToSupabase(file: BackupFile, businessId: string):
     categories: d.categories.map((c) => ({ id: catIds.get(c.id), business_id: b, name: c.name, sort: c.sort })),
     products,
     dining_tables: d.tables.map((t) => ({
-      id: tableIds.get(t.id), business_id: b, label: t.id, zone: t.zone, seats: t.seats, pos_x: t.x, pos_y: t.y, status: t.status,
+      id: tableIds.get(t.id), business_id: b, label: t.label?.trim() || t.id, zone: t.zone, seats: t.seats, pos_x: t.x, pos_y: t.y, status: t.status,
       guests: t.guests, waiter: t.waiter, opened_at: iso(t.openedAt), reservation_time: t.reserva?.time ?? null, reservation_note: t.reserva?.note ?? null,
     })),
     orders,

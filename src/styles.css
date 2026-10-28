@@ -259,6 +259,10 @@ table.data .r { text-align: right; }
 .t-ocupada { background: var(--ok-bg); border: 2px solid var(--ok-ink); }
 .t-cuenta { background: var(--warn-bg); border: 2px solid var(--warn-bar); }
 .t-reservada { background: var(--info-bg); border: 2px dashed var(--info-ink); }
+.floor-wrap.editing { box-shadow: 0 0 0 2px var(--accent); }
+.floor-wrap.editing .table-btn { cursor: grab; }
+.table-spot.dragging { z-index: 5; }
+.table-spot.dragging .table-btn { cursor: grabbing; box-shadow: 0 12px 28px rgba(28, 25, 23, 0.25); }
 .legend-swatch { width: 14px; height: 14px; border-radius: 4px; }
 
 /* ---------- Kanban de órdenes ---------- */
