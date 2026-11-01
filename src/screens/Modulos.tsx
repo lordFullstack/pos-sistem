@@ -64,24 +64,21 @@ export function Modulos() {
         )}
         {switching && <SwitchUserDialog onClose={() => setSwitching(false)} />}
 
-        <div style={{ flex: '1 1 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(14rem, 1fr))', gridAutoRows: 'minmax(11rem, 1fr)', gap: 16 }}>
+        <div className="modules">
           {cards.map((c) => {
             const locked = c.perm ? !can(user?.role, c.perm) : false;
             const here = c.route === 'caja';
             return (
-              <a key={c.route} href={`#/${c.route}`} className="card"
-                style={{ position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 24, borderRadius: 20, textDecoration: 'none', color: here ? '#fff' : 'var(--ink)', background: here ? 'var(--accent)' : '#fff', boxShadow: here ? 'none' : undefined, opacity: locked ? 0.6 : 1 }}>
-                <Icon name={c.icon} size={40} stroke={1.6} />
+              <a key={c.route} href={`#/${c.route}`} className={`card module-card${here ? ' here' : ''}${locked ? ' locked' : ''}`}>
+                <Icon name={c.icon} size={36} stroke={1.6} />
                 <span className="col" style={{ gap: 4 }}>
-                  <span style={{ fontSize: '1.375rem', fontWeight: 800 }}>{c.title}</span>
-                  <span style={{ fontSize: '0.875rem', color: here ? 'rgba(255,255,255,.9)' : 'var(--ink-3)' }}>{c.desc}</span>
+                  <span className="m-title">{c.title}</span>
+                  <span className="m-desc">{c.desc}</span>
                 </span>
                 {locked ? (
                   <span className="tag" style={{ position: 'absolute', top: 20, right: 20 }}><Icon name="info" size={12} stroke={2.6} /> Sin acceso</span>
                 ) : (
-                  <span aria-hidden="true" style={{ position: 'absolute', top: 20, right: 20, width: 32, height: 32, borderRadius: 999, background: here ? 'rgba(255,255,255,.2)' : 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name="arrowRight" size={16} stroke={2.4} />
-                  </span>
+                  <span className="m-go" aria-hidden="true"><Icon name="arrowRight" size={16} stroke={2.4} /></span>
                 )}
               </a>
             );

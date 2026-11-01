@@ -104,7 +104,7 @@ export function Contabilidad() {
 
         <section className="kpis" aria-label="Resumen del mes">
           <div className="kpi"><span className="k-label">Ingresos</span><span className="k-value num">{money(income)}</span><span className="k-note">{monthSales.length} ventas registradas en caja</span></div>
-          <div className="kpi"><span className="k-label">Gastos</span><span className="k-value num">{money(spent)}</span><span className="k-note">{monthExpenses.length} gastos anotados</span></div>
+          <div className="kpi"><span className="k-label">Gastos</span><span className="k-value num">{money(spent)}</span><span className="k-note">{monthExpenses.length === 1 ? '1 gasto anotado' : `${monthExpenses.length} gastos anotados`}</span></div>
           <div className="kpi strong"><span className="k-label">Utilidad</span><span className="k-value num">{money(profit)}</span><span className="k-note">{income ? `Margen del ${margin}%` : 'Sin ingresos este mes'}</span></div>
           <div className="kpi"><span className="k-label">{tax === 'iva' ? 'IVA por declarar' : 'Impoconsumo por declarar'}</span><span className="k-value num">{money(taxTotal)}</span><span className="k-note">Incluido en los ingresos</span></div>
         </section>

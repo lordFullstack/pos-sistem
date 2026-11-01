@@ -1,6 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+// Letra incluida en la app: funciona sin internet.
+import '@fontsource-variable/manrope';
 import './styles.css';
 
 const printRoot = document.createElement('div');

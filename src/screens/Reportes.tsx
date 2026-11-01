@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PayMethod } from '../types';
 import { useCurrentUser, useStore } from '../store';
 import { TAX, dateTime, intLabel, money, moneyShort, time } from '../lib/format';
@@ -19,7 +19,22 @@ const PERIODS: [Period, string, string, string][] = [
   ['mes', 'Este mes', 'Ventas por semana', 'vs. mes anterior'],
 ];
 const PAY_LABEL: Record<PayMethod, string> = { tarjeta: 'Tarjeta', efectivo: 'Efectivo', transferencia: 'Transferencia' };
-const PLOT_H = 260;
+
+/** Alto del área de barras: llena el espacio libre de la tarjeta (entre 160 y 460 px). */
+function usePlotHeight() {
+  const [h, setH] = useState(260);
+  const observer = useRef<ResizeObserver | null>(null);
+  // Ref de función: se vuelve a enganchar si el gráfico se desmonta (al pasar a Tabla y volver).
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    if (!el) return;
+    // Resta las etiquetas de abajo y deja aire arriba para el globo del valor.
+    observer.current = new ResizeObserver(() => setH(Math.max(160, Math.min(460, Math.floor(el.clientHeight - 64)))));
+    observer.current.observe(el);
+  }, []);
+  useEffect(() => () => observer.current?.disconnect(), []);
+  return { ref, h };
+}
 
 export function Reportes() {
   const user = useCurrentUser();
@@ -32,7 +47,9 @@ export function Reportes() {
   const [hover, setHover] = useState(-1);
   const [closing, setClosing] = useState(false);
   const closures = useStore((s) => s.closures);
+  const plot = usePlotHeight();
 
+  const PLOT_H = plot.h;
   const now = Date.now();
   const r = rangeFor(period, now);
   const cur = useMemo(() => salesIn(sales, r.start, r.end), [sales, r.start, r.end]);
@@ -110,8 +127,8 @@ export function Reportes() {
           {max === 0 ? (
             <div className="empty"><Icon name="chart" size={36} stroke={1.6} /><strong>Todavía no hay ventas en este periodo</strong><span>Cuando cobres en la caja, aquí verás el resultado.</span></div>
           ) : view === 'chart' ? (
-            <div className="col" style={{ flex: '1 1 auto', justifyContent: 'flex-end', gap: 0, minHeight: PLOT_H + 30 }}>
-              <div className="chart">
+            <div ref={plot.ref} className="col" style={{ flex: '1 1 auto', minHeight: 0, justifyContent: 'flex-end', gap: 0 }}>
+              <div className="chart" style={{ height: PLOT_H }}>
                 <div className="grid-line" style={{ top: 0 }} />
                 <div className="grid-line" style={{ top: PLOT_H / 2 }} />
                 <div className="grid-line" style={{ bottom: 0, background: '#d6d0c9' }} />
