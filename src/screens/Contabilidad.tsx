@@ -4,6 +4,7 @@ import { useCurrentUser, useStore } from '../store';
 import { TAX, dayLabel, money, monthLabel } from '../lib/format';
 import { dailyIncome, monthRange, salesIn } from '../lib/stats';
 import { downloadText, toCsv } from '../lib/backup';
+import { netSales } from '../lib/refunds';
 import { can } from '../data/roles';
 import { Icon } from '../components/Icon';
 import { Brand } from '../components/Brand';
@@ -19,7 +20,9 @@ type Filter = 'todos' | 'in' | 'out';
 
 export function Contabilidad() {
   const user = useCurrentUser();
-  const sales = useStore((s) => s.sales);
+  // Con las devoluciones ya descontadas.
+  const rawSales = useStore((s) => s.sales);
+  const sales = useMemo(() => netSales(rawSales), [rawSales]);
   const expenses = useStore((s) => s.expenses);
   const tax = useStore((s) => s.settings.tax);
   const addExpense = useStore((s) => s.addExpense);
@@ -101,7 +104,7 @@ export function Contabilidad() {
 
         <section className="kpis" aria-label="Resumen del mes">
           <div className="kpi"><span className="k-label">Ingresos</span><span className="k-value num">{money(income)}</span><span className="k-note">{monthSales.length} ventas registradas en caja</span></div>
-          <div className="kpi"><span className="k-label">Gastos</span><span className="k-value num">{money(spent)}</span><span className="k-note">{monthExpenses.length} gastos anotados</span></div>
+          <div className="kpi"><span className="k-label">Gastos</span><span className="k-value num">{money(spent)}</span><span className="k-note">{monthExpenses.length === 1 ? '1 gasto anotado' : `${monthExpenses.length} gastos anotados`}</span></div>
           <div className="kpi strong"><span className="k-label">Utilidad</span><span className="k-value num">{money(profit)}</span><span className="k-note">{income ? `Margen del ${margin}%` : 'Sin ingresos este mes'}</span></div>
           <div className="kpi"><span className="k-label">{tax === 'iva' ? 'IVA por declarar' : 'Impoconsumo por declarar'}</span><span className="k-value num">{money(taxTotal)}</span><span className="k-note">Incluido en los ingresos</span></div>
         </section>

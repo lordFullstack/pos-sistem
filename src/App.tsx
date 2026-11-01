@@ -11,6 +11,7 @@ import { Contabilidad } from './screens/Contabilidad';
 import { Ajustes } from './screens/Ajustes';
 import { Modulos } from './screens/Modulos';
 import { Menu } from './screens/Menu';
+import { SaveBanner } from './components/SaveBanner';
 
 export function App() {
   const settings = useStore((s) => s.settings);
@@ -25,8 +26,15 @@ export function App() {
     document.title = settings.onboarded ? `${settings.bizName} · POS` : 'POS Moderno';
   }, [settings.accent, settings.textSize, settings.bizName, settings.onboarded]);
 
-  if (!settings.onboarded) return <Bienvenida />;
+  return (
+    <>
+      <SaveBanner />
+      {!settings.onboarded ? <Bienvenida /> : <Screen route={route} param={param} />}
+    </>
+  );
+}
 
+function Screen({ route, param }: ReturnType<typeof useRoute>) {
   switch (route) {
     case 'mesas': return <Mesas />;
     case 'ordenes': return <Ordenes />;

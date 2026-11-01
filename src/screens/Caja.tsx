@@ -60,6 +60,7 @@ export function Caja({ tableParam }: { tableParam: string }) {
   const [printing, setPrinting] = useState(false);
   const [sent, setSent] = useState('');
   const [switching, setSwitching] = useState(false);
+  const [error, setError] = useState('');
 
   const mode = cart.mode ?? catalog.defaultMode;
   const useTables = catalog.hasTables && mode === 'mesa';
@@ -101,15 +102,25 @@ export function Caja({ tableParam }: { tableParam: string }) {
 
   const onCharge = () => {
     if (empty || !canCharge) return;
-    const order = checkout({ lines: cart.lines, method: pay, mode, customer: cart.customer.trim() || undefined });
-    setPaid({ order, total: t.total, method: PAY.find((p) => p[0] === pay)![1].toLowerCase() });
+    setError('');
+    try {
+      const order = checkout({ lines: cart.lines, method: pay, mode, customer: cart.customer.trim() || undefined });
+      setPaid({ order, total: t.total, method: PAY.find((p) => p[0] === pay)![1].toLowerCase() });
+    } catch (e) {
+      setError((e as Error).message);
+    }
   };
 
   const onSend = () => {
     if (empty || !table || !canCharge) return;
-    const order = sendToKitchen({ lines: cart.lines, tableId: table.id });
-    cart.clear();
-    setSent(`Comanda ${orderLabel(order.number)} enviada a cocina para la mesa ${tableLabel(table)}.`);
+    setError('');
+    try {
+      const order = sendToKitchen({ lines: cart.lines, tableId: table.id });
+      cart.clear();
+      setSent(`Comanda ${orderLabel(order.number)} enviada a cocina para la mesa ${tableLabel(table)}.`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   };
 
   return (
@@ -222,6 +233,7 @@ export function Caja({ tableParam }: { tableParam: string }) {
           <div className="grand"><span>Total</span><span>{money(t.total)}</span></div>
         </div>
 
+        {error && <div className="notice notice-warn" role="alert"><Icon name="warning" size={16} /> <span className="grow">{error}</span></div>}
         {!canCharge && <div className="notice notice-warn"><Icon name="info" size={16} /> Tu rol no puede cobrar ni enviar comandas.</div>}
 
         {useTables ? (

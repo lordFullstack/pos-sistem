@@ -112,6 +112,18 @@ export interface Sale {
   total: number;
   method: PayMethod;
   userId: string;
+  /** Órdenes de esta venta que se cancelaron después de cobrar (devolución al cliente). */
+  refunds?: Refund[];
+}
+
+export interface Refund {
+  orderId: string;
+  at: number;
+  lines: CartLine[];
+  subtotal: number;
+  tax: number;
+  total: number;
+  userId: string;
 }
 
 export type TableStatus = 'libre' | 'ocupada' | 'cuenta' | 'reservada';

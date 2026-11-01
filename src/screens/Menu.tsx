@@ -178,14 +178,14 @@ function ProductEditor({ product: p, onDeleted }: { product: Product; onDeleted:
 
       <label className="field"><span className="label">Nombre</span><input className="input" value={p.name} onChange={(e) => set({ name: e.target.value })} /></label>
       <label className="field"><span className="label">Descripción corta</span><input className="input" value={p.desc} onChange={(e) => set({ desc: e.target.value })} placeholder="Ej. Pan artesanal" /></label>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.25fr)', gap: 12 }}>
         <label className="field">
           <span className="label">Precio</span>
           <span className="row" style={{ height: 48, padding: '0 14px', borderRadius: 12, background: 'var(--bg)', gap: 4 }}>
             <span style={{ fontWeight: 800, color: 'var(--ink-3)' }}>$</span>
             <input className="num grow" inputMode="numeric" value={p.price ? money(p.price).slice(1) : ''} placeholder="0"
               onChange={(e) => set({ price: digits(e.target.value) })}
-              style={{ border: 0, outline: 'none', background: 'transparent', fontSize: '1rem', fontWeight: 800, minWidth: 0, height: 44 }} />
+              style={{ border: 0, outline: 'none', background: 'transparent', fontSize: '1rem', fontWeight: 800, minWidth: 0, width: '100%', height: 44 }} />
           </span>
         </label>
         <label className="field">
