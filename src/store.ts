@@ -13,6 +13,7 @@ import { ensureZones, freeSpot, seedTables } from './data/tables';
 import { mergeLines, totals } from './lib/cart';
 import { uid } from './lib/format';
 import { refundFor } from './lib/refunds';
+import { PALETTES, isPaletteAccent } from './data/palettes';
 
 const NEXT_STATUS: Partial<Record<Order['status'], Order['status']>> = {
   pendiente: 'prep',
@@ -131,7 +132,8 @@ export const useStore = create<Store>()(
             const names = Object.values(CATALOGS).map((c) => c.defaultName);
             const bizName = names.includes(s.settings.bizName) ? CATALOGS[type].defaultName : s.settings.bizName;
             return {
-              settings: { ...s.settings, bizType: type, bizName },
+              // El color sigue al tipo de negocio, salvo que lo hayan elegido a mano.
+              settings: { ...s.settings, bizType: type, bizName, accent: isPaletteAccent(s.settings.accent) ? PALETTES[type].accent : s.settings.accent },
               tables: CATALOGS[type].hasTables && s.tables.length === 0 ? seedTables() : s.tables,
               zones: CATALOGS[type].hasTables && s.tables.length === 0 ? ensureZones(s.zones, seedTables()) : s.zones,
               ...(resetMenu ? seedMenu(type) : {}),

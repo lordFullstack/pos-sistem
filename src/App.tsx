@@ -12,6 +12,7 @@ import { Ajustes } from './screens/Ajustes';
 import { Modulos } from './screens/Modulos';
 import { Menu } from './screens/Menu';
 import { SaveBanner } from './components/SaveBanner';
+import { gradientEnd } from './data/palettes';
 
 export function App() {
   const settings = useStore((s) => s.settings);
@@ -21,6 +22,7 @@ export function App() {
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--accent', settings.accent);
+    root.style.setProperty('--accent-2', gradientEnd(settings.accent));
     root.dataset.text = settings.textSize;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', settings.accent);
     document.title = settings.onboarded ? `${settings.bizName} · POS` : 'POS Moderno';
