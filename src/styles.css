@@ -304,3 +304,7 @@ table.data .r { text-align: right; }
   .modnav { flex-wrap: wrap; }
   .modnav a, .modnav span { flex: 1 1 30%; }
 }
+
+/* Aviso de guardado: encima de todo, centrado arriba. */
+.save-banner { position: fixed; top: 0.75rem; left: 50%; transform: translateX(-50%); z-index: 1000; width: min(46rem, calc(100% - 2rem)); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); }
+@media print { .save-banner { display: none; } }

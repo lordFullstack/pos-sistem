@@ -4,6 +4,7 @@ import { orderLabel, useCurrentUser, useStore } from '../store';
 import { totals } from '../lib/cart';
 import { TAX, minutesSince, money } from '../lib/format';
 import { startOfDay } from '../lib/stats';
+import { refundFor } from '../lib/refunds';
 import { can } from '../data/roles';
 import { Icon } from '../components/Icon';
 import { Brand } from '../components/Brand';
@@ -25,6 +26,7 @@ export function Ordenes() {
   const settings = useStore((s) => s.settings);
   const orders = useStore((s) => s.orders);
   const tables = useStore((s) => s.tables);
+  const sales = useStore((s) => s.sales);
   const advanceOrder = useStore((s) => s.advanceOrder);
   const cancelOrder = useStore((s) => s.cancelOrder);
   const [filter, setFilter] = useState<Filter>('todas');
@@ -32,6 +34,7 @@ export function Ordenes() {
   const [sel, setSel] = useState('');
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [, tick] = useState(0);
 
   useEffect(() => {
@@ -58,6 +61,26 @@ export function Ordenes() {
     const t = tables.find((x) => x.id === o.tableId);
     return t ? tableLabel(t) : '(borrada)';
   }
+  // Si la orden ya se cobró, cuánto se devolvería al cancelarla.
+  const saleOf = (o: Order) => (o.paid ? sales.find((x) => x.orderIds.includes(o.id)) : undefined);
+  const refundPreview = (o: Order) => {
+    const sale = saleOf(o);
+    return sale ? { total: refundFor(sale, o, '').total, method: sale.method } : null;
+  };
+  const cancel = (o: Order) => {
+    setConfirmCancel(false);
+    try {
+      const refund = cancelOrder(o.id);
+      setNotice({
+        ok: true,
+        text: refund
+          ? `Orden ${orderLabel(o.number)} cancelada. Devuelve ${money(refund.total)} al cliente; ya se descontó de reportes y contabilidad.`
+          : `Orden ${orderLabel(o.number)} cancelada${o.tableId ? ` y quitada de la cuenta de la mesa ${tableName(o)}` : ''}.`,
+      });
+    } catch (e) {
+      setNotice({ ok: false, text: (e as Error).message });
+    }
+  };
   const where = (o: Order) => (o.tableId ? `Mesa ${tableName(o)}` : o.mode === 'mesa' ? 'Para comer aquí' : `Para llevar${o.customer ? ' · ' + o.customer : ''}`);
 
   const advance = (o: Order) => {
@@ -103,7 +126,7 @@ export function Ordenes() {
                     const late = mins >= 10;
                     const t = totals(o.lines, settings.tax);
                     return (
-                      <button key={o.id} type="button" className="order-card" aria-pressed={selected?.id === o.id} onClick={() => { setSel(o.id); setConfirmCancel(false); }} aria-label={`Orden ${orderLabel(o.number)}, ${where(o)}`}>
+                      <button key={o.id} type="button" className="order-card" aria-pressed={selected?.id === o.id} onClick={() => { setSel(o.id); setConfirmCancel(false); setNotice(null); }} aria-label={`Orden ${orderLabel(o.number)}, ${where(o)}`}>
                         <div className="row" style={{ width: '100%', gap: 8 }}>
                           <span style={{ fontSize: '1rem', fontWeight: 800 }}>{orderLabel(o.number)}</span>
                           <span className={`tag spacer ${late ? 'tag-warn' : ''}`}><Icon name="clock" size={12} stroke={2.6} /> {mins} min</span>
@@ -127,6 +150,11 @@ export function Ordenes() {
       </main>
 
       <aside className="aside" aria-label="Detalle de la orden">
+        {notice && (
+          <div className={`notice ${notice.ok ? 'notice-ok' : 'notice-warn'}`} role={notice.ok ? 'status' : 'alert'}>
+            <Icon name={notice.ok ? 'check' : 'warning'} size={16} /> <span className="grow">{notice.text}</span>
+          </div>
+        )}
         {!selected ? (
           <div className="empty">
             <Icon name="receipt" size={40} stroke={1.6} />
@@ -136,8 +164,8 @@ export function Ordenes() {
         ) : (
           <Detail
             o={selected} where={where(selected)} tax={settings.tax}
-            canCancel={can(user?.role, 'anular')} confirmCancel={confirmCancel}
-            onAskCancel={() => setConfirmCancel(true)} onCancel={() => { cancelOrder(selected.id); setConfirmCancel(false); }} onKeep={() => setConfirmCancel(false)}
+            canCancel={can(user?.role, 'anular')} confirmCancel={confirmCancel} refund={refundPreview(selected)}
+            onAskCancel={() => { setConfirmCancel(true); setNotice(null); }} onCancel={() => cancel(selected)} onKeep={() => setConfirmCancel(false)}
             onAdvance={() => advance(selected)} onPrint={() => setPrinting(true)}
           />
         )}
@@ -149,6 +177,7 @@ export function Ordenes() {
 
 function Detail(p: {
   o: Order; where: string; tax: TaxMode; canCancel: boolean; confirmCancel: boolean;
+  refund: { total: number; method: string } | null;
   onAskCancel: () => void; onCancel: () => void; onKeep: () => void; onAdvance: () => void; onPrint: () => void;
 }) {
   const { o } = p;
@@ -196,18 +225,23 @@ function Detail(p: {
       {p.confirmCancel ? (
         <div className="notice notice-warn" role="alertdialog" aria-label="Confirmar cancelación" style={{ flexWrap: 'wrap' }}>
           <Icon name="warning" size={18} />
-          <span className="grow" style={{ fontWeight: 600 }}>¿Cancelar la orden {orderLabel(o.number)}? {o.paid ? 'El cobro ya está registrado; haz la devolución aparte.' : ''}</span>
+          <span className="grow" style={{ fontWeight: 600 }}>
+            ¿Cancelar la orden {orderLabel(o.number)}?{' '}
+            {p.refund
+              ? `Ya se cobró: se registra una devolución de ${money(p.refund.total)} (${p.refund.method}) y se descuenta de los reportes.`
+              : o.tableId && !o.paid ? `Se quita de la cuenta (${p.where}).` : ''}
+          </span>
           <button type="button" className="btn btn-sm btn-white" onClick={p.onKeep}>No</button>
           <button type="button" className="btn btn-sm" style={{ background: '#8a3b12', color: '#fff' }} onClick={p.onCancel}>Sí, cancelar</button>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <button type="button" className="btn btn-md" onClick={p.onPrint}><Icon name="print" size={18} /> Imprimir comanda</button>
-          {!o.paid && o.tableId ? (
-            <a className="btn btn-md btn-outline" href="#/mesas">Cobrar en Mesas</a>
-          ) : (
-            <button type="button" className="btn btn-md btn-danger" disabled={!p.canCancel} title={p.canCancel ? undefined : 'Solo un administrador puede cancelar'} onClick={p.onAskCancel}>Cancelar orden</button>
-          )}
+          {!o.paid && o.tableId && <a className="btn btn-md btn-outline" href="#/mesas">Cobrar en Mesas</a>}
+          <button type="button" className="btn btn-md btn-danger" style={!o.paid && o.tableId ? { gridColumn: '1 / -1' } : undefined}
+            disabled={!p.canCancel} title={p.canCancel ? undefined : 'Solo un administrador puede cancelar'} onClick={p.onAskCancel}>
+            {!o.paid && o.tableId ? 'Anular comanda' : 'Cancelar orden'}
+          </button>
         </div>
       )}
 

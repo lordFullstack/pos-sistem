@@ -1,16 +1,18 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import { useMemo } from 'react';
 import type {
   ActiveCatalog, AppData, BizType, CartLine, CashClosure, Category, DiningTable, Expense, InventoryItem, Order, OrderMode,
-  PayMethod, Product, Settings, User,
+  PayMethod, Product, Refund, Settings, User,
 } from './types';
+import { SaveError, lastSaveOk, safeLocalStorage } from './lib/safeStorage';
 import { emptyData, upgradeData } from './data/initial';
 import { CATALOGS, seedMenu } from './data/catalogs';
 import { seedInventory } from './data/inventory';
 import { ensureZones, freeSpot, seedTables } from './data/tables';
 import { mergeLines, totals } from './lib/cart';
 import { uid } from './lib/format';
+import { refundFor } from './lib/refunds';
 
 const NEXT_STATUS: Partial<Record<Order['status'], Order['status']>> = {
   pendiente: 'prep',
@@ -44,10 +46,12 @@ interface Actions {
   /** Devuelve un mensaje de error si el cambio dejaría el negocio sin administrador. */
   updateUser: (id: string, patch: Partial<User>) => string | null;
 
+  // Las acciones con dinero lanzan SaveError (y no cambian nada) si no se pudieron guardar.
   checkout: (p: { lines: CartLine[]; method: PayMethod; mode: OrderMode; customer?: string }) => Order;
   sendToKitchen: (p: { lines: CartLine[]; tableId: string }) => Order;
   advanceOrder: (id: string) => void;
-  cancelOrder: (id: string) => void;
+  /** Cancela una orden. Si ya estaba cobrada, registra la devolución en su venta y la devuelve. */
+  cancelOrder: (id: string) => Refund | null;
 
   openTable: (id: string, guests: number) => void;
   setGuests: (id: string, guests: number) => void;
@@ -104,6 +108,15 @@ export const useStore = create<Store>()(
       const patchTable = (id: string, patch: Partial<DiningTable>) =>
         set((s) => ({ tables: s.tables.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
       const currentUser = () => get().users.find((u) => u.id === get().settings.currentUserId);
+      /** Aplica un cambio con dinero. Si no se pudo guardar en la tablet, lo deshace y avisa. */
+      const commit = (patch: Partial<AppData>) => {
+        const prev = dataOf(get());
+        set(patch);
+        if (!lastSaveOk()) {
+          set(prev);
+          throw new SaveError();
+        }
+      };
 
       return {
         ...blank(),
@@ -171,7 +184,7 @@ export const useStore = create<Store>()(
             id: uid(), number: s.nextOrderNumber, createdAt: Date.now(), mode, customer,
             lines, status: 'pendiente', paid: true,
           };
-          set({
+          commit({
             orders: [...s.orders, order],
             nextOrderNumber: s.nextOrderNumber + 1,
             sales: [...s.sales, {
@@ -187,21 +200,34 @@ export const useStore = create<Store>()(
             id: uid(), number: s.nextOrderNumber, createdAt: Date.now(), mode: 'mesa', tableId,
             lines, status: 'pendiente', paid: false,
           };
-          const table = s.tables.find((t) => t.id === tableId);
-          set({ orders: [...s.orders, order], nextOrderNumber: s.nextOrderNumber + 1 });
-          if (table && (table.status === 'libre' || table.status === 'reservada')) {
-            patchTable(tableId, {
-              status: 'ocupada', openedAt: Date.now(), guests: Math.max(1, table.guests),
-              waiter: currentUser()?.name.split(' ')[0] ?? '', reserva: undefined,
-            });
-          }
+          const seat = (t: DiningTable): DiningTable =>
+            t.id === tableId && (t.status === 'libre' || t.status === 'reservada')
+              ? { ...t, status: 'ocupada', openedAt: Date.now(), guests: Math.max(1, t.guests), waiter: currentUser()?.name.split(' ')[0] ?? '', reserva: undefined }
+              : t;
+          commit({ orders: [...s.orders, order], nextOrderNumber: s.nextOrderNumber + 1, tables: s.tables.map(seat) });
           return order;
         },
         advanceOrder: (id) =>
           set((s) => ({
             orders: s.orders.map((o) => (o.id === id && NEXT_STATUS[o.status] ? { ...o, status: NEXT_STATUS[o.status]! } : o)),
           })),
-        cancelOrder: (id) => set((s) => ({ orders: s.orders.map((o) => (o.id === id ? { ...o, status: 'cancelada' } : o)) })),
+        cancelOrder: (id) => {
+          const s = get();
+          const order = s.orders.find((o) => o.id === id);
+          if (!order || order.status === 'cancelada') return null;
+          const orders = s.orders.map((o) => (o.id === id ? { ...o, status: 'cancelada' as const } : o));
+          const sale = order.paid ? s.sales.find((x) => x.orderIds.includes(id)) : undefined;
+          if (!sale) {
+            commit({ orders });
+            return null;
+          }
+          const refund = refundFor(sale, order, s.settings.currentUserId);
+          commit({
+            orders,
+            sales: s.sales.map((x) => (x.id === sale.id ? { ...x, refunds: [...(x.refunds ?? []), refund] } : x)),
+          });
+          return refund;
+        },
 
         openTable: (id, guests) =>
           patchTable(id, { status: 'ocupada', guests: Math.max(1, guests), openedAt: Date.now(), waiter: currentUser()?.name.split(' ')[0] ?? '' }),
@@ -213,7 +239,7 @@ export const useStore = create<Store>()(
           const lines = mergeLines(open.map((o) => o.lines));
           const t = totals(lines, s.settings.tax);
           const ids = open.map((o) => o.id);
-          set({
+          commit({
             orders: s.orders.map((o) => (ids.includes(o.id) ? { ...o, paid: true } : o)),
             sales: lines.length
               ? [...s.sales, {
@@ -221,8 +247,8 @@ export const useStore = create<Store>()(
                   subtotal: t.subtotal, tax: t.tax, total: t.total, method, userId: s.settings.currentUserId,
                 }]
               : s.sales,
+            tables: s.tables.map((x) => (x.id === id ? { ...x, status: 'libre', guests: 0, waiter: '', openedAt: undefined } : x)),
           });
-          patchTable(id, { status: 'libre', guests: 0, waiter: '', openedAt: undefined });
           return t.total;
         },
         seatReservation: (id) => {
@@ -303,6 +329,7 @@ export const useStore = create<Store>()(
     {
       name: 'pos-moderno-data',
       version: 3,
+      storage: createJSONStorage(() => safeLocalStorage),
       partialize: (s) => dataOf(s),
       // Datos guardados con una versión anterior de la app se ponen al día solos.
       migrate: (persisted) => upgradeData(persisted) as unknown as Store,

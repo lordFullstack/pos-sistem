@@ -4,6 +4,7 @@ import { useCurrentUser, useStore } from '../store';
 import { TAX, dayLabel, money, monthLabel } from '../lib/format';
 import { dailyIncome, monthRange, salesIn } from '../lib/stats';
 import { downloadText, toCsv } from '../lib/backup';
+import { netSales } from '../lib/refunds';
 import { can } from '../data/roles';
 import { Icon } from '../components/Icon';
 import { Brand } from '../components/Brand';
@@ -19,7 +20,9 @@ type Filter = 'todos' | 'in' | 'out';
 
 export function Contabilidad() {
   const user = useCurrentUser();
-  const sales = useStore((s) => s.sales);
+  // Con las devoluciones ya descontadas.
+  const rawSales = useStore((s) => s.sales);
+  const sales = useMemo(() => netSales(rawSales), [rawSales]);
   const expenses = useStore((s) => s.expenses);
   const tax = useStore((s) => s.settings.tax);
   const addExpense = useStore((s) => s.addExpense);

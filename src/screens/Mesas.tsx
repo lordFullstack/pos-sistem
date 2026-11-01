@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DiningTable, PayMethod, TableStatus, Zone } from '../types';
 import { useCatalog, useCurrentUser, useStore } from '../store';
 import { useCart } from '../cartStore';
@@ -36,9 +36,14 @@ export function Mesas() {
   const [zonePick, setZone] = useState(() => tables.find((t) => t.status !== 'libre')?.zone ?? zones[0]?.id ?? '');
   const [zonesOpen, setZonesOpen] = useState(false);
   const [sel, setSel] = useState(() => tables.find((t) => t.status !== 'libre')?.id ?? tables[0]?.id ?? '');
-  const [pay, setPay] = useState<PayMethod>('tarjeta');
+  // Sin medio de pago elegido de antemano: el cajero lo toca en cada cobro.
+  const [pay, setPay] = useState<PayMethod | null>(null);
   const [dialog, setDialog] = useState<'reserve' | 'move' | null>(null);
   const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  // El botón principal cambia de acción al tocarlo (Abrir → Pedir la cuenta → Cobrar).
+  // Ignoramos toques seguidos para que un doble toque no haga dos pasos.
+  const lockedUntil = useRef(0);
   const [printing, setPrinting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; sx: number; sy: number; x0: number; y0: number; moved: boolean } | null>(null);
@@ -95,20 +100,28 @@ export function Mesas() {
   };
 
   const primary = () => {
-    if (!table) return;
+    if (!table || Date.now() < lockedUntil.current) return;
+    if (table.status === 'cuenta' && !pay) return;
+    lockedUntil.current = Date.now() + 800;
     setNotice('');
+    setError('');
     if (table.status === 'libre') st.openTable(table.id, Math.max(1, table.guests || 2));
     else if (table.status === 'ocupada') st.requestBill(table.id);
     else if (table.status === 'reservada') st.seatReservation(table.id);
-    else if (table.status === 'cuenta') {
-      const total = st.chargeTable(table.id, pay);
-      setNotice(`Mesa ${tableLabel(table)} cobrada: ${money(total)}. Quedó libre.`);
+    else if (table.status === 'cuenta' && pay) {
+      try {
+        const total = st.chargeTable(table.id, pay);
+        setPay(null);
+        setNotice(`Mesa ${tableLabel(table)} cobrada: ${money(total)} en ${PAY.find((p) => p[0] === pay)![1].toLowerCase()}. Quedó libre.`);
+      } catch (e) {
+        setError((e as Error).message);
+      }
     }
   };
   const primaryLabel = !table ? '' : {
     libre: 'Abrir mesa',
     ocupada: 'Pedir la cuenta',
-    cuenta: `Cobrar ${money(tt.total)}`,
+    cuenta: pay ? `Cobrar ${money(tt.total)}` : 'Elige el medio de pago',
     reservada: 'Sentar a los clientes',
   }[table.status];
 
@@ -134,7 +147,7 @@ export function Mesas() {
             {zones.map(({ id: z, name }) => {
               const list = tables.filter((t) => t.zone === z);
               return (
-                <button key={z} type="button" className="chip" aria-pressed={zone === z} onClick={() => { setZone(z); setSel(list[0]?.id ?? ''); }}>
+                <button key={z} type="button" className="chip" aria-pressed={zone === z} onClick={() => { setZone(z); setSel(list[0]?.id ?? ''); setPay(null); }}>
                   {name} <span className="count">{list.filter((t) => t.status === 'ocupada' || t.status === 'cuenta').length}/{list.length}</span>
                 </button>
               );
@@ -180,7 +193,7 @@ export function Mesas() {
                   ))}
                   <button
                     type="button" className={`table-btn ${LOOK[t.status].swatch}`} aria-pressed={table?.id === t.id}
-                    style={{ borderRadius: g.round ? 999 : 16, touchAction: editing ? 'none' : undefined }} onClick={() => { setSel(t.id); setNotice(''); }}
+                    style={{ borderRadius: g.round ? 999 : 16, touchAction: editing ? 'none' : undefined }} onClick={() => { setSel(t.id); setNotice(''); setError(''); setPay(null); }}
                     aria-label={`Mesa ${tableLabel(t)}, ${t.seats} puestos, ${LOOK[t.status].label}${info ? ', ' + info : ''}${editing ? '. Usa las flechas para moverla' : ''}`}
                     onPointerDown={(e) => {
                       if (!editing) return;
@@ -261,6 +274,7 @@ export function Mesas() {
           </div>
 
           {notice && <div className="notice notice-ok" role="status"><Icon name="check" size={16} stroke={3} /> {notice}</div>}
+          {error && <div className="notice notice-warn" role="alert"><Icon name="warning" size={16} /> {error}</div>}
 
           <div className="scroll col" style={{ gap: 0 }}>
             {table.status === 'reservada' && (
@@ -299,7 +313,7 @@ export function Mesas() {
 
           {table.status === 'cuenta' && (
             <div className="pay-grid" role="group" aria-label="Medio de pago">
-              {PAY.map(([id, label]) => <button key={id} type="button" aria-pressed={pay === id} onClick={() => setPay(id)}>{label}</button>)}
+              {PAY.map(([id, label]) => <button key={id} type="button" aria-pressed={pay === id} onClick={() => { setPay(id); lockedUntil.current = 0; }}>{label}</button>)}
             </div>
           )}
 
@@ -313,7 +327,7 @@ export function Mesas() {
             {table.status === 'reservada' && <button type="button" className="btn btn-md btn-outline" style={{ gridColumn: '1 / -1' }} onClick={() => st.cancelReservation(table.id)}>Cancelar reserva</button>}
           </div>
 
-          <button type="button" className="btn btn-primary btn-lg" onClick={primary}>
+          <button type="button" className="btn btn-primary btn-lg" disabled={table.status === 'cuenta' && !pay} onClick={primary}>
             {primaryLabel} <Icon name="arrowRight" stroke={2.4} />
           </button>
         </aside>

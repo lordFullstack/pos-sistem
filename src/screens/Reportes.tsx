@@ -5,6 +5,7 @@ import { TAX, dateTime, intLabel, money, moneyShort, time } from '../lib/format'
 import { buckets, change, niceMax, paySplit, rangeFor, salesIn, startOfDay, summarize, topProducts, type Period } from '../lib/stats';
 import { downloadText, toCsv } from '../lib/backup';
 import { backupNow } from '../lib/backupStore';
+import { netSales } from '../lib/refunds';
 import { can } from '../data/roles';
 import { Icon } from '../components/Icon';
 import { Brand } from '../components/Brand';
@@ -22,7 +23,9 @@ const PLOT_H = 260;
 
 export function Reportes() {
   const user = useCurrentUser();
-  const sales = useStore((s) => s.sales);
+  // Con las devoluciones ya descontadas.
+  const rawSales = useStore((s) => s.sales);
+  const sales = useMemo(() => netSales(rawSales), [rawSales]);
   const settings = useStore((s) => s.settings);
   const [period, setPeriod] = useState<Period>('hoy');
   const [view, setView] = useState<'chart' | 'table'>('chart');

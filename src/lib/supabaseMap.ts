@@ -110,6 +110,11 @@ export async function mapBackupToSupabase(file: BackupFile, businessId: string):
     sales.push({
       id: sid, business_id: b, at: iso(s.at), subtotal: Math.round(s.subtotal), tax: Math.round(s.tax), total: Math.round(s.total), method: s.method,
       staff_id: staffIds.get(s.userId) ?? null, order_ids: s.orderIds.map((x) => orderIds.get(x)).filter(Boolean),
+      refunds: (s.refunds ?? []).map((r) => ({
+        order_id: orderIds.get(r.orderId) ?? null, at: iso(r.at),
+        subtotal: Math.round(r.subtotal), tax: Math.round(r.tax), total: Math.round(r.total), staff_id: staffIds.get(r.userId) ?? null,
+        lines: r.lines.map((l) => ({ name: l.name, note: l.note, unit_price: Math.round(l.unit), qty: l.qty })),
+      })),
     });
     saleItems.push(...(await lineRows(s.lines, s.id, 'sale_id', sid, 'sale_item')));
   }
