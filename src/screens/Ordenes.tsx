@@ -75,6 +75,8 @@ export function Ordenes() {
         ok: true,
         text: refund
           ? `Orden ${orderLabel(o.number)} cancelada. Devuelve ${money(refund.total)} al cliente; ya se descontó de reportes y contabilidad.`
+          : o.paid
+          ? `Orden ${orderLabel(o.number)} cancelada. No se encontró su cobro, así que no se descontó de los reportes: registra la devolución aparte.`
           : `Orden ${orderLabel(o.number)} cancelada${o.tableId ? ` y quitada de la cuenta de la mesa ${tableName(o)}` : ''}.`,
       });
     } catch (e) {
@@ -229,7 +231,8 @@ function Detail(p: {
             ¿Cancelar la orden {orderLabel(o.number)}?{' '}
             {p.refund
               ? `Ya se cobró: se registra una devolución de ${money(p.refund.total)} (${p.refund.method}) y se descuenta de los reportes.`
-              : o.tableId && !o.paid ? `Se quita de la cuenta (${p.where}).` : ''}
+              : o.paid ? 'Figura como pagada pero no se encontró su cobro: la devolución no se descontará sola de los reportes.'
+              : o.tableId ? `Se quita de la cuenta (${p.where}).` : ''}
           </span>
           <button type="button" className="btn btn-sm btn-white" onClick={p.onKeep}>No</button>
           <button type="button" className="btn btn-sm" style={{ background: '#8a3b12', color: '#fff' }} onClick={p.onCancel}>Sí, cancelar</button>
