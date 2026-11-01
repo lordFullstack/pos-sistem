@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { BizType } from '../types';
 import { useStore } from '../store';
 import { BIZ_TYPES, CATALOGS } from '../data/catalogs';
 import { ADMIN_ID, demoData, emptyData } from '../data/initial';
 import { hashPin, pinProblem } from '../lib/pin';
 import { BizIcon } from '../components/ProductIcon';
+import { PALETTES } from '../data/palettes';
 import { Icon } from '../components/Icon';
 
 /** Primera vez: tipo de negocio, nombre y administrador. */
@@ -31,7 +32,8 @@ export function Bienvenida() {
   const digits = (v: string) => v.replace(/\D/g, '').slice(0, 4);
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+    // La pantalla toma el color del tipo de negocio elegido, para ver cómo quedará.
+    <div className="welcome" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', '--accent': PALETTES[type].accent, '--accent-2': PALETTES[type].accent2 } as CSSProperties}>
       <div className="card col" style={{ width: 'min(46rem, 100%)', padding: '2rem', gap: '1.5rem', borderRadius: 24 }}>
         <div className="col" style={{ gap: 6 }}>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Bienvenido a POS Moderno</h1>
@@ -45,7 +47,7 @@ export function Bienvenida() {
               const active = type === t;
               return (
                 <button key={t} type="button" role="radio" aria-checked={active} onClick={() => setType(t)}
-                  style={{ height: 84, border: 0, borderRadius: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: '0.875rem', fontWeight: 700, background: active ? 'var(--accent)' : '#fff', color: active ? '#fff' : 'var(--ink)', boxShadow: active ? 'none' : 'var(--shadow-ring)' }}>
+                  style={{ height: 84, border: 0, borderRadius: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: '0.875rem', fontWeight: 700, background: active ? 'var(--accent-grad)' : '#fff', color: active ? '#fff' : 'var(--ink)', boxShadow: active ? 'var(--accent-glow)' : 'var(--shadow-ring)', transition: 'background 200ms var(--ease-out), box-shadow 200ms var(--ease-out)' }}>
                   <BizIcon type={t} size={26} />
                   {CATALOGS[t].label}
                 </button>

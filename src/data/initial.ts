@@ -2,6 +2,7 @@ import type { AppData, BizType, CartLine, DiningTable, Expense, Order, PayMethod
 import { CATALOGS, seedMenu } from './catalogs';
 import { seedInventory } from './inventory';
 import { DEFAULT_ZONES, ensureZones, seedTables } from './tables';
+import { PALETTES } from './palettes';
 import { buildLine, defaultSelection, maxFor, totals } from '../lib/cart';
 import { startOfDay } from '../lib/stats';
 
@@ -20,7 +21,7 @@ export function emptyData(type: BizType, bizName: string, adminName: string, adm
       bizType: type,
       bizName: bizName || CATALOGS[type].defaultName,
       nit: '',
-      accent: '#1F5F45',
+      accent: PALETTES[type].accent,
       tax: 'impo',
       textSize: 'normal',
       footer: '¡Gracias por tu visita!',

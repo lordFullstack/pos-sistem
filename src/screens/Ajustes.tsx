@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { BackupEntry, BizType, Role, TaxMode, User } from '../types';
 import { useCatalog, useCurrentUser, useStore } from '../store';
 import { BIZ_TYPES, CATALOGS } from '../data/catalogs';
+import { EXTRA_SWATCHES, PALETTES, gradientEnd } from '../data/palettes';
 import { PERMISSIONS, ROLES, can, roleLabel } from '../data/roles';
 import { buildLine } from '../lib/cart';
 import { TAX, dateTime } from '../lib/format';
@@ -20,7 +21,8 @@ import { hashPin, pinProblem } from '../lib/pin';
 
 type Section = 'brand' | 'roles' | 'backup';
 
-const SWATCHES: [string, string][] = [['#1F5F45', 'Verde'], ['#2B2B2B', 'Grafito'], ['#8A3B12', 'Terracota'], ['#1E4E8C', 'Azul'], ['#7A2848', 'Vino']];
+// Primero el color de cada tipo de negocio, luego dos neutros. Cualquier otro, con "Otro".
+const SWATCHES: [string, string][] = [...BIZ_TYPES.map((t): [string, string] => [PALETTES[t].accent, PALETTES[t].name]), ...EXTRA_SWATCHES];
 
 export function Ajustes({ initialSection }: { initialSection?: string }) {
   const user = useCurrentUser();
@@ -93,7 +95,7 @@ function BrandSection() {
             const active = settings.bizType === t;
             return (
               <button key={t} type="button" role="radio" aria-checked={active} onClick={() => !active && setPending(t)}
-                style={{ height: 64, border: 0, borderRadius: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, fontSize: '0.8125rem', fontWeight: 700, background: active ? 'var(--accent)' : '#fff', color: active ? '#fff' : 'var(--ink)', boxShadow: active ? 'none' : 'var(--shadow-ring)' }}>
+                style={{ height: 64, border: 0, borderRadius: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, fontSize: '0.8125rem', fontWeight: 700, background: active ? 'var(--accent-grad)' : '#fff', color: active ? '#fff' : 'var(--ink)', boxShadow: active ? 'var(--accent-glow)' : 'var(--shadow-ring)' }}>
                 <BizIcon type={t} size={22} />
                 {CATALOGS[t].label}
               </button>
@@ -146,7 +148,7 @@ function BrandSection() {
             return (
               <button key={hex} type="button" className="chip" aria-pressed={active} onClick={() => update({ accent: hex })}
                 style={{ height: 48, padding: '0 16px 0 8px', background: '#fff', color: 'var(--ink)', boxShadow: active ? `0 0 0 2px ${hex}` : 'var(--shadow-ring)' }}>
-                <span aria-hidden="true" style={{ width: 32, height: 32, borderRadius: 999, background: hex, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{active && <Icon name="check" size={16} stroke={3} />}</span>
+                <span aria-hidden="true" style={{ width: 32, height: 32, borderRadius: 999, background: `linear-gradient(135deg, ${hex}, ${gradientEnd(hex)})`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{active && <Icon name="check" size={16} stroke={3} />}</span>
                 {label}
               </button>
             );
@@ -193,7 +195,6 @@ function BrandSection() {
 
 function PreviewPanel() {
   const catalog = useCatalog();
-  const accent = useStore((s) => s.settings.accent);
   const lines = catalog.items.slice(0, 3).map((p) => buildLine(p, Object.fromEntries((p.opts ?? []).map((g, gi) => [gi, g.type === 'one' ? [0] : g.min ? [0] : []]))));
   return (
     <div className="col" style={{ flex: '1 1 auto', gap: 14 }}>
@@ -206,7 +207,7 @@ function PreviewPanel() {
       </div>
       <div className="col" style={{ marginTop: 'auto', gap: 8 }}>
         <span className="label" style={{ color: 'var(--ink-2)' }}>Botón principal</span>
-        <span className="btn btn-primary btn-lg" style={{ background: accent }}>Cobrar</span>
+        <span className="btn btn-primary btn-lg">Cobrar</span>
       </div>
     </div>
   );
@@ -247,7 +248,7 @@ function RolesSection({ sel, onSelect: setSel }: { sel: string; onSelect: (id: s
         <div className="scroll">
           {users.map((u) => (
             <button key={u.id} type="button" className="list-row" aria-pressed={(sel || current?.id) === u.id} onClick={() => setSel(u.id)}>
-              <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 999, background: '#eae6e1', fontSize: '0.875rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>{initials(u.name)}</span>
+              <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 999, background: 'var(--bg)', fontSize: '0.875rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>{initials(u.name)}</span>
               <span className="col grow" style={{ gap: 2 }}>
                 <span style={{ fontSize: '0.9375rem', fontWeight: 700 }}>{u.name}{u.id === current?.id ? ' (tú)' : ''}</span>
                 <span className="small" style={{ color: 'var(--ink-3)' }}>{u.email || 'Sin correo'}</span>
@@ -283,7 +284,7 @@ function UserPanel({ sel }: { sel: string }) {
   return (
     <div className="col" style={{ flex: '1 1 auto', minHeight: 0, gap: 14 }}>
       <div className="row">
-        <span aria-hidden="true" style={{ width: 48, height: 48, borderRadius: 999, background: '#eae6e1', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initials(u.name)}</span>
+        <span aria-hidden="true" style={{ width: 48, height: 48, borderRadius: 999, background: 'var(--bg)', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initials(u.name)}</span>
         <div className="col grow" style={{ gap: 2 }}>
           <span style={{ fontSize: '1.125rem', fontWeight: 800 }}>{u.name}</span>
           <span className="muted">{u.email || 'Sin correo'}</span>
